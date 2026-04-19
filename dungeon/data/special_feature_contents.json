@@ -1,0 +1,559 @@
+{
+  "Altar": {
+    "treasure_chance": 10,
+    "special_item_chance": 25,
+    "rumor_chance": 20,
+    "trap_chance": 5,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Barrel": {
+    "treasure_chance": 15,
+    "special_item_chance": 5,
+    "rumor_chance": 0,
+    "trap_chance": 0,
+    "monster_chance": 10,
+    "monster_list": [
+      "Rat",
+      "Spider",
+      "Giant Centipede",
+      "Bat Swarm",
+      "Centipede Swarm"
+    ]
+  },
+  "Bookcase": {
+    "treasure_chance": 10,
+    "special_item_chance": 25,
+    "rumor_chance": 35,
+    "trap_chance": 0,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Brazier": {
+    "treasure_chance": 5,
+    "special_item_chance": 0,
+    "rumor_chance": 0,
+    "trap_chance": 0,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Cage": {
+    "treasure_chance": 10,
+    "special_item_chance": 5,
+    "rumor_chance": 5,
+    "trap_chance": 0,
+    "monster_chance": 20,
+    "monster_list": [
+      "Rat",
+      "Goblin Scout",
+      "Beastman",
+      "Boar",
+      "Doppelganger"
+    ]
+  },
+  "Campfire": {
+    "treasure_chance": 0,
+    "special_item_chance": 0,
+    "rumor_chance": 10,
+    "trap_chance": 0,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Candle": {
+    "treasure_chance": 0,
+    "special_item_chance": 0,
+    "rumor_chance": 0,
+    "trap_chance": 0,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Chair": {
+    "treasure_chance": 0,
+    "special_item_chance": 0,
+    "rumor_chance": 0,
+    "trap_chance": 0,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Cobwebs": {
+    "treasure_chance": 15,
+    "special_item_chance": 5,
+    "rumor_chance": 0,
+    "trap_chance": 0,
+    "monster_chance": 30,
+    "monster_list": [
+      "Spider",
+      "Bat Swarm"
+    ]
+  },
+  "Coffin": {
+    "treasure_chance": 20,
+    "special_item_chance": 10,
+    "rumor_chance": 10,
+    "trap_chance": 5,
+    "monster_chance": 75,
+    "monster_list": [
+      "Skeleton",
+      "Zombie",
+      "Ghoul",
+      "Ghast"
+    ]
+  },
+  "Cot": {
+    "treasure_chance": 5,
+    "special_item_chance": 0,
+    "rumor_chance": 0,
+    "trap_chance": 0,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Crate": {
+    "treasure_chance": 15,
+    "special_item_chance": 2,
+    "rumor_chance": 0,
+    "trap_chance": 0,
+    "monster_chance": 15,
+    "monster_list": [
+      "Rat",
+      "Bat Swarm",
+      "Centipede Swarm"
+    ]
+  },
+  "Crown": {
+    "treasure_chance": 40,
+    "special_item_chance": 30,
+    "rumor_chance": 20,
+    "trap_chance": 0,
+    "monster_chance": 5,
+    "monster_list": [
+      "Wailing Ghost"
+    ]
+  },
+  "Cupboard": {
+    "treasure_chance": 15,
+    "special_item_chance": 5,
+    "rumor_chance": 5,
+    "trap_chance": 0,
+    "monster_chance": 10,
+    "monster_list": [
+      "Rat"
+    ]
+  },
+  "Dais": {
+    "treasure_chance": 15,
+    "special_item_chance": 10,
+    "rumor_chance": 15,
+    "trap_chance": 10,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Desk": {
+    "treasure_chance": 15,
+    "special_item_chance": 10,
+    "rumor_chance": 20,
+    "trap_chance": 2,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Debris": {
+    "treasure_chance": 5,
+    "special_item_chance": 0,
+    "rumor_chance": 0,
+    "trap_chance": 1,
+    "monster_chance": 10,
+    "monster_list": [
+      "Rat",
+      "Spider",
+      "Giant Centipede"
+    ]
+  },
+  "Fence": {
+    "treasure_chance": 0,
+    "special_item_chance": 0,
+    "rumor_chance": 0,
+    "trap_chance": 0,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Fireplace": {
+    "treasure_chance": 5,
+    "special_item_chance": 1,
+    "rumor_chance": 1,
+    "trap_chance": 0,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Fountain": {
+    "treasure_chance": 15,
+    "special_item_chance": 10,
+    "rumor_chance": 25,
+    "trap_chance": 0,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Fungus": {
+    "treasure_chance": 0,
+    "special_item_chance": 0,
+    "rumor_chance": 0,
+    "trap_chance": 0,
+    "monster_chance": 10,
+    "monster_list": [
+      "Spider",
+      "Giant Centipede",
+      "Cave Creeper",
+      "Mushroomfolk"
+    ]
+  },
+  "Group of Barrels": {
+    "treasure_chance": 25,
+    "special_item_chance": 10,
+    "rumor_chance": 0,
+    "trap_chance": 0,
+    "monster_chance": 20,
+    "monster_list": [
+      "Rat",
+      "Spider",
+      "Giant Centipede",
+      "Bat Swarm",
+      "Centipede Swarm",
+      "Mushroomfolk"
+    ]
+  },
+  "Hut": {
+    "treasure_chance": 15,
+    "special_item_chance": 5,
+    "rumor_chance": 10,
+    "trap_chance": 1,
+    "monster_chance": 20,
+    "monster_list": [
+      "Goblin Scout",
+      "Orc"
+    ]
+  },
+  "Lectern": {
+    "treasure_chance": 10,
+    "special_item_chance": 25,
+    "rumor_chance": 35,
+    "trap_chance": 5,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Logs": {
+    "treasure_chance": 5,
+    "special_item_chance": 0,
+    "rumor_chance": 0,
+    "trap_chance": 0,
+    "monster_chance": 5,
+    "monster_list": [
+      "Spider",
+      "Rat"
+    ]
+  },
+  "Magic Circle": {
+    "treasure_chance": 15,
+    "special_item_chance": 20,
+    "rumor_chance": 20,
+    "trap_chance": 0,
+    "monster_chance": 20,
+    "monster_list": [
+      "Dark Elf",
+      "Cultist Mage",
+      "Imp Devil",
+      "Drow Priestess"
+    ]
+  },
+  "Magic Portal": {
+    "treasure_chance": 25,
+    "special_item_chance": 20,
+    "rumor_chance": 30,
+    "trap_chance": 0,
+    "monster_chance": 30,
+    "monster_list": [
+      "Cultist Mage",
+      "Imp Devil",
+      "Drow Priestess"
+    ]
+  },
+  "Mirror": {
+    "treasure_chance": 0,
+    "special_item_chance": 0,
+    "rumor_chance": 15,
+    "trap_chance": 0,
+    "monster_chance": 10,
+    "monster_list": [
+      "Scary Face"
+    ]
+  },
+  "Mushrooms": {
+    "treasure_chance": 0,
+    "special_item_chance": 0,
+    "rumor_chance": 0,
+    "trap_chance": 0,
+    "monster_chance": 15,
+    "monster_list": [
+      "Spider",
+      "Giant Centipede",
+      "Mushroomfolk"
+    ]
+  },
+  "Obelisk": {
+    "treasure_chance": 15,
+    "special_item_chance": 10,
+    "rumor_chance": 30,
+    "trap_chance": 5,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Pedestal": {
+    "treasure_chance": 30,
+    "special_item_chance": 25,
+    "rumor_chance": 25,
+    "trap_chance": 15,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Pile of Chests": {
+    "treasure_chance": 60,
+    "special_item_chance": 35,
+    "rumor_chance": 20,
+    "trap_chance": 40,
+    "monster_chance": 5,
+    "monster_list": [
+      "Mimic"
+    ]
+  },
+  "Pile of Weapons and Armor": {
+    "treasure_chance": 60,
+    "special_item_chance": 35,
+    "rumor_chance": 20,
+    "trap_chance": 20,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Pillar": {
+    "treasure_chance": 0,
+    "special_item_chance": 0,
+    "rumor_chance": 0,
+    "trap_chance": 0,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Pit": {
+    "treasure_chance": 10,
+    "special_item_chance": 5,
+    "rumor_chance": 5,
+    "trap_chance": 60,
+    "monster_chance": 25,
+    "monster_list": [
+      "Spider",
+      "Rat",
+      "Giant Centipede"
+    ]
+  },
+  "Plant": {
+    "treasure_chance": 0,
+    "special_item_chance": 0,
+    "rumor_chance": 1,
+    "trap_chance": 0,
+    "monster_chance": 5,
+    "monster_list": [
+      "Spider",
+      "Giant Centipede"
+    ]
+  },
+  "Pool": {
+    "treasure_chance": 15,
+    "special_item_chance": 10,
+    "rumor_chance": 10,
+    "trap_chance": 10,
+    "monster_chance": 10,
+    "monster_list": [
+      "Blob Fish"
+    ]
+  },
+  "Quicksand": {
+    "treasure_chance": 10,
+    "special_item_chance": 0,
+    "rumor_chance": 5,
+    "trap_chance": 80,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Rocks": {
+    "treasure_chance": 2,
+    "special_item_chance": 0,
+    "rumor_chance": 0,
+    "trap_chance": 5,
+    "monster_chance": 10,
+    "monster_list": [
+      "Rat",
+      "Giant Centipede",
+      "Cave Creeper"
+    ]
+  },
+  "Rubble": {
+    "treasure_chance": 15,
+    "special_item_chance": 5,
+    "rumor_chance": 0,
+    "trap_chance": 10,
+    "monster_chance": 10,
+    "monster_list": [
+      "Rat",
+      "Spider",
+      "Cave Creeper"
+    ]
+  },
+  "Rug": {
+    "treasure_chance": 15,
+    "special_item_chance": 5,
+    "rumor_chance": 5,
+    "trap_chance": 1,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Sarcophagus": {
+    "treasure_chance": 35,
+    "special_item_chance": 20,
+    "rumor_chance": 10,
+    "trap_chance": 10,
+    "monster_chance": 75,
+    "monster_list": [
+      "Skeleton",
+      "Zombie",
+      "Ghoul",
+      "Mummy"
+    ]
+  },
+  "Stack of Books": {
+    "treasure_chance": 10,
+    "special_item_chance": 5,
+    "rumor_chance": 40,
+    "trap_chance": 1,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Stack of Crates": {
+    "treasure_chance": 25,
+    "special_item_chance": 10,
+    "rumor_chance": 0,
+    "trap_chance": 1,
+    "monster_chance": 10,
+    "monster_list": [
+      "Rat",
+      "Spider",
+      "Giant Centipede",
+      "Centipede Swarm"
+    ]
+  },
+  "Statue": {
+    "treasure_chance": 20,
+    "special_item_chance": 15,
+    "rumor_chance": 25,
+    "trap_chance": 5,
+    "monster_chance": 0,
+    "monster_list": [
+      "Gargoyle",
+      "Cyclops",
+      "Chimera",
+      "Drider"
+    ]
+  },
+  "Stool": {
+    "treasure_chance": 0,
+    "special_item_chance": 0,
+    "rumor_chance": 0,
+    "trap_chance": 0,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Table": {
+    "treasure_chance": 5,
+    "special_item_chance": 1,
+    "rumor_chance": 1,
+    "trap_chance": 0,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Target": {
+    "treasure_chance": 0,
+    "special_item_chance": 1,
+    "rumor_chance": 1,
+    "trap_chance": 0,
+    "monster_chance": 0,
+    "monster_list": []
+  },
+  "Tent": {
+    "treasure_chance": 15,
+    "special_item_chance": 1,
+    "rumor_chance": 10,
+    "trap_chance": 1,
+    "monster_chance": 25,
+    "monster_list": [
+      "Goblin Scout",
+      "Orc",
+      "Rat"
+    ]
+  },
+  "Throne": {
+    "treasure_chance": 35,
+    "special_item_chance": 25,
+    "rumor_chance": 30,
+    "trap_chance": 50,
+    "monster_chance": 0,
+    "monster_list": [
+      "Wailing Ghost"
+    ]
+  },
+  "Torture Rack": {
+    "treasure_chance": 10,
+    "special_item_chance": 5,
+    "rumor_chance": 10,
+    "trap_chance": 10,
+    "monster_chance": 25,
+    "monster_list": [
+      "Skeleton",
+      "Wailing Ghost",
+      "Possessed Head"
+    ]
+  },
+  "Treasure Pile": {
+    "treasure_chance": 80,
+    "special_item_chance": 50,
+    "rumor_chance": 15,
+    "trap_chance": 50,
+    "monster_chance": 5,
+    "monster_list": [
+      "Mimic"
+    ]
+  },
+  "Tree": {
+    "treasure_chance": 1,
+    "special_item_chance": 1,
+    "rumor_chance": 5,
+    "trap_chance": 0,
+    "monster_chance": 5,
+    "monster_list": [
+      "Spider"
+    ]
+  },
+  "Well": {
+    "treasure_chance": 15,
+    "special_item_chance": 10,
+    "rumor_chance": 10,
+    "trap_chance": 5,
+    "monster_chance": 15,
+    "monster_list": [
+      "Rat",
+      "Spider",
+      "Giant Centipede"
+    ]
+  },
+  "Weapon Rack": {
+    "treasure_chance": 35,
+    "special_item_chance": 35,
+    "rumor_chance": 5,
+    "trap_chance": 0,
+    "monster_chance": 0,
+    "monster_list": []
+  }
+}

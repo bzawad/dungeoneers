@@ -1,0 +1,112 @@
+name,image,armor_class,hit_points,attack_bonus,damage_dice,weapon,treasure,rarity,size,role,hunts_player,challenge_rating,alignment
+Acolyte,acolyte.png,10,5,1,1d6,Mace,1d4,common,1.0,npc,0,1,lawful
+Hooded Acolyte,hooded_acolyte.png,11,6,2,1d6,Mace,1d4,uncommon,1.0,npc,0,1,lawful
+Animated Armor,animated_armor.png,16,18,4,1d8,Sword,,uncommon,1.0,,1,4,neutral
+Ant,ant.png,12,2,1,1d2,Mandibles,1d4,common,0.75,,0,1,neutral
+Apprentice,apprentice.png,11,6,1,1d4,Dagger,1d4,common,1.0,npc,0,1,neutral
+Archmage,archmage.png,14,18,5,2d8,Arcane Blast,3d6,elite,1.0,,1,4,neutral
+Assassin,assassin.png,15,12,4,2d4,Dagger,2d6,rare,1.0,,1,4,chaotic
+Bandit,bandit.png,12,8,2,1d6,Club,1d6,common,1.0,,1,2,chaotic
+Bat Swarm,bat_swarm.png,13,8,2,2d4,Bite,,uncommon,1.25,,1,2,neutral
+Beastman,beastman.png,14,14,3,1d8,Spear,1d6,uncommon,1.25,,1,4,chaotic
+Berserker,berserker.png,13,14,3,1d8,Greataxe,1d12,uncommon,1.25,,1,2,chaotic
+Black Pudding,black_pudding.png,12,22,3,2d6,Acidic Slam,,rare,1.5,,1,4,chaotic
+Blob Fish,blob_fish.png,9,8,0,1d4,Gooey Slap,,common,1.0,,0,2,neutral
+Boar,boar.png,12,5,2,1d6,Tusks,,common,1.0,,0,2,neutral
+Brain Eater,brain_eater.png,15,16,4,1d10,Psychic Blast,2d6,rare,1.0,,1,4,chaotic
+Bugbear,bugbear.png,15,16,3,2d6,Morningstar,2d6,uncommon,1.5,,1,3,chaotic
+Cave Brute,cave_brute.png,13,18,3,2d6,Claws,,uncommon,1.5,,1,5,chaotic
+Cave Creeper,cave_creeper.png,12,9,2,1d6,Bite,,common,1.5,,1,2,neutral
+Centaur,centaur.png,14,15,3,1d8,Spear,2d6,uncommon,1.5,,0,4,neutral
+Centipede Swarm,centipede_swarm.png,12,7,2,2d4,Bite,,common,1.0,,1,2,neutral
+Chimera,chimera.png,16,22,5,2d8,Fire Breath,3d6,elite,2.0,,1,6,chaotic
+Clay Golem,clay_golem.png,16,30,4,2d10,Slam,,elite,2.0,,1,6,neutral
+Cloaker,cloaker.png,15,13,4,1d8,Bite,,rare,1.25,,1,3,chaotic
+Cultist Fighter,cultist_fighter.png,13,8,2,1d8,Sword,1d4,common,1.0,,1,2,chaotic
+Cultist Mage,cultist_mage.png,12,7,3,1d8,Magic Bolt,1d6,uncommon,1.0,,1,2,chaotic
+Cyclops,cyclops.png,14,20,4,2d6,Club,2d6,rare,2.0,,1,4,chaotic
+Dark Elf,dark_elf.png,15,9,1,1d8,Rapier,2d6,rare,1.0,,1,3,chaotic
+Darkmantle,darkmantle.png,13,8,2,1d6,Crush,,uncommon,1.0,,1,3,chaotic
+Deep Gnome,deep_gnome.png,13,7,1,1d4,Pickaxe,1d6,uncommon,0.75,,0,2,neutral
+Doppelganger,doppelganger.png,14,12,3,1d8,Slam,2d6,rare,1.0,,1,4,neutral
+Drider,drider.png,16,18,4,2d6,Spear,2d6,rare,1.5,,1,5,chaotic
+Drow,drow.png,14,10,2,1d6,Sword,1d6,uncommon,1.0,,1,3,chaotic
+Drow Priestess,drow_priestess.png,15,14,4,1d10,Whip,2d6,rare,1.0,,1,4,chaotic
+Druid,druid.png,12,10,2,1d6,Staff,1d6,uncommon,1.0,npc,0,2,neutral
+Dryad,dryad.png,13,8,2,1d6,Staff,1d6,uncommon,1.0,,0,2,neutral
+Duergar,duergar.png,15,12,3,1d8,Warhammer,1d8,uncommon,0.75,,1,3,neutral
+Efreeti,efreeti.png,17,28,6,2d10,Flame Blade,2d8,elite,2.0,,1,6,chaotic
+Ettercap,ettercap.png,13,10,2,1d8,Poison Bite,1d6,uncommon,1.25,,1,3,chaotic
+Evil Guard,evil_guard.png,15,10,3,1d10,Halberd,1d6,uncommon,1.0,guard,1,3,chaotic
+Evil Lizardfolk,evil_lizardfolk.png,14,13,2,1d8,Spear,1d6,uncommon,1.0,,1,3,chaotic
+Evil Mage,evil_mage.png,12,9,3,1d10,Fireball,2d6,rare,1.0,,1,3,chaotic
+Evil Piggy,evil_piggy.png,12,7,1,1d6,Tusks,1d4,common,1.0,,1,2,chaotic
+Fairy,fairy.png,15,4,2,1d4,Dagger,1d4,rare,0.75,,0,2,neutral
+Female Druid,female_druid.png,12,10,2,1d6,Staff,1d6,uncommon,1.0,npc,0,2,neutral
+Female Elf,female_elf.png,14,8,2,1d6,Shortbow,1d6,uncommon,1.0,,0,2,neutral
+Flesh Golem,flesh_golem.png,15,28,4,2d8,Slam,,elite,2.0,,1,6,neutral
+Gargoyle,gargoyle.png,17,22,4,2d6,Claws,,rare,1.5,,1,4,chaotic
+Gelatinous Cube,gelatinous_cube.png,6,22,3,2d6,Acid,2d6,rare,3.0,,1,4,neutral
+Ghast,ghast.png,14,13,3,1d8,Claws,,uncommon,1.0,,1,4,chaotic
+Wailing Ghost,wailing_ghost.png,13,12,3,1d8,Chill Touch,,rare,1.0,,1,3,chaotic
+Silent Ghost,silent_ghost.png,14,14,4,1d8,Haunt,,rare,1.0,,1,4,chaotic
+Ghoul,ghoul.png,13,11,2,1d6,Claws,,uncommon,1.0,,1,3,chaotic
+Giant Bat,giant_bat.png,12,7,1,1d6,Bite,,common,1.0,,0,2,neutral
+Giant Centipede,giant_centipede.png,13,3,2,1d4,Bite,,common,1.0,,0,1,neutral
+Giant Crab,giant_crab.png,15,7,2,1d6,Claw,,common,1.0,,0,2,neutral
+Giant Dung Beetle,giant_dung_beetle.png,12,8,1,1d6,Mandibles,,common,1.5,,0,2,neutral
+Giant Frog,giant_frog.png,12,6,1,1d6,Tongue Lash,,common,1.0,,0,2,neutral
+Gibbering Mouther,gibbering_mouther.png,13,18,3,2d6,Bite,2d6,rare,1.5,,1,4,chaotic
+Gnoll,gnoll.png,13,12,2,1d8,Spear,1d6,uncommon,1.25,,1,3,chaotic
+Goblin Scout,goblin_scout.png,11,5,0,1d4,Dagger,1d4,common,0.75,,1,1,chaotic
+Goblin Warrior,goblin_warrior.png,12,6,1,1d6,Club,1d4,common,0.75,,1,1,chaotic
+Goblin Boss,goblin_boss.png,13,10,2,1d6,Spear,2d6,rare,1.0,,1,2,chaotic
+Goblin Shaman,goblin_shaman.png,12,7,2,1d6,Magic Bolt,1d6,uncommon,0.75,,1,2,chaotic
+God Of All Multiverses,god_of_all_multiverses.png,18,20,5,2d12,Reality Warp,3d6,elite,1.5,,0,6,neutral
+Gorgon,gorgon.png,17,22,4,2d8,Petrifying Breath,2d6,rare,2.0,,1,5,chaotic
+Gorilla,gorilla.png,13,16,3,2d6,Fists,,uncommon,1.5,,1,3,neutral
+Grick,grick.png,14,10,2,1d6,Tentacles,,uncommon,1.25,,1,2,chaotic
+Griffon,griffon.png,15,18,4,2d8,Claws,2d6,rare,1.5,,1,5,neutral
+Guard,guard.png,14,8,2,1d6,Spear,,common,1.0,guard,0,3,lawful
+Harpy,harpy.png,13,9,2,1d6,Claws,1d6,uncommon,1.0,,1,3,chaotic
+Hell Hound,hell_hound.png,15,14,3,2d6,Fire Breath,,rare,1.0,,1,4,chaotic
+Hobgoblin,hobgoblin.png,15,11,2,1d8,Longsword,1d6,uncommon,1.0,,1,3,chaotic
+Imp Devil,imp_devil.png,15,9,3,1d6,Sting,1d6,rare,0.75,,1,3,chaotic
+Innkeeper,innkeeper.png,10,5,0,1d2,Fists,1d4,common,1.0,npc,0,1,lawful
+Iron Golem,iron_golem.png,19,40,6,2d12,Slam,,elite,2.0,,1,7,neutral
+Kobold Spearman,kobold_spearman.png,12,5,1,1d4,Spear,1d4,common,0.75,,1,2,chaotic
+Kobold Slinger,kobold_spearman.png,11,4,2,1d4,Sling,1d4,common,0.75,,1,1,chaotic
+Kobold Defender,kobold_defender.png,13,6,2,1d4,Spear,1d4,common,0.75,,1,1,chaotic
+Lich,lich.png,17,18,5,2d8,Necrotic Touch,3d6,elite,1.0,,1,5,chaotic
+Lizard Dude,lizard_dude.png,14,11,2,1d6,Spear,1d6,uncommon,1.0,,0,3,neutral
+Lizardfolk,lizardfolk.png,14,12,2,1d8,Spear,1d6,uncommon,1.0,,0,3,neutral
+Mage,mage.png,12,8,2,1d6,Magic Missile,1d6,uncommon,1.0,,0,1,neutral
+Maid,maid.png,10,3,0,1d2,Broom,1d2,common,1.0,npc,0,1,lawful
+Male Elf,male_elf.png,14,8,2,1d6,Longbow,1d6,uncommon,1.0,,0,1,neutral
+Medusa,medusa.png,15,16,4,1d10,Petrifying Gaze,2d6,rare,1.0,,1,4,chaotic
+Merchant,merchant.png,10,5,0,1d2,Fists,2d6,common,1.0,npc,0,1,lawful
+Mimic,mimic.png,14,15,3,1d8,Bite,2d6,rare,1.0,,1,3,chaotic
+Minotaur,minotaur.png,16,20,4,2d8,Greataxe,2d6,rare,1.5,,1,5,chaotic
+Moeshrooom,moeshrooom.png,13,15,2,1d6,Slam,,uncommon,1.0,,0,4,neutral
+Mummy,mummy.png,13,14,3,1d8,Rotting Fist,2d6,rare,1.0,,1,4,chaotic
+Mushroomfolk,mushroomfolk.png,11,6,1,1d4,Spore Cloud,,common,1.25,,0,1,neutral
+Night Hag,night_hag.png,15,16,4,1d10,Claws,2d6,rare,1.0,,1,4,chaotic
+Ogre,ogre.png,12,20,3,2d6,Club,,common,2.0,,0,5,chaotic
+Orc,orc.png,15,6,2,1d8,Greataxe,1d6,uncommon,1.25,,1,1,chaotic
+Orc Boss,orc_boss.png,17,10,3,1d12,Club,2d6,rare,1.5,,0,2,chaotic
+Orc Chieftain,orc_chieftain.png,18,16,4,2d8,Greataxe,2d6,rare,1.5,,1,3,chaotic
+Owlbear,owlbear.png,15,17,4,2d6,Claws,2d6,rare,1.5,,1,4,neutral
+Possessed Head,possessed_head.png,16,15,4,1d10,Psychic Blast,2d6,rare,1.0,,1,4,chaotic
+Rat,rat.png,10,1,0,1d1,Bite,,common,0.75,,0,1,neutral
+Scary Face,scary_face.png,14,12,3,1d8,Terror Scream,2d6,rare,1.25,,1,3,chaotic
+Skeleton,skeleton.png,13,10,1,1d8,Longsword,,uncommon,1.0,,1,2,chaotic
+Snow Ape,snow_ape.png,13,18,3,2d6,Fists,,uncommon,1.5,,1,4,neutral
+Kobold Shaman,kobold_shaman.png,13,7,2,1d6,Magic Bolt,1d6,uncommon,0.75,,1,2,chaotic
+Kobold Warlock,kobold_warlock.png,14,8,3,1d8,Magic Bolt,1d6,uncommon,0.75,,1,2,chaotic
+Spider,spider.png,11,1,1,1d1,Bite,,common,0.75,,0,1,neutral
+Stone Golem,stone_golem.png,18,36,5,2d10,Slam,,elite,2.0,,1,7,neutral
+Thug,thug.png,10,5,1,1d2,Fists,1d6,common,1.0,npc,0,1,chaotic
+Town Guard,town_guard.png,15,10,2,1d8,Spear,,common,1.0,guard,0,1,lawful
+Weald Hag,weald_hag.png,14,12,3,1d8,Claws,2d6,rare,1.0,,1,2,chaotic
+Zombie,zombie.png,8,11,2,1d6,Slam,,common,1.0,,1,1,chaotic
+Zombie Piggy,zombie_piggy.png,10,13,2,1d6,Rotting Bite,,uncommon,1.0,,1,3,chaotic

@@ -1,0 +1,2050 @@
+[
+  {
+    "direction": "lateral",
+    "floor_theme": "dirt_and_grass.png",
+    "fog_type": "daylight",
+    "generation_type": "outdoor",
+    "monsters": [
+      {
+        "name": "Ogre",
+        "rarity": "rare"
+      },
+      {
+        "name": "Bandit",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Druid",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Fairy",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Lizardfolk",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Owlbear",
+        "rarity": "rare"
+      },
+      {
+        "name": "Centaur",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Mushroomfolk",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Dryad",
+        "rarity": "rare"
+      },
+      {
+        "name": "Female Druid",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Female Elf",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Male Elf",
+        "rarity": "uncommon"
+      }
+    ],
+    "name": "Pleasant Woods",
+    "special_features": [
+      {
+        "name": "Barrel",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Campfire",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Crate",
+        "rarity": "rare"
+      },
+      {
+        "name": "Fungus",
+        "rarity": "common"
+      },
+      {
+        "name": "Hut",
+        "rarity": "rare"
+      },
+      {
+        "name": "Logs",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Mushrooms",
+        "rarity": "common"
+      },
+      {
+        "name": "Plant",
+        "rarity": "common"
+      },
+      {
+        "name": "Rocks",
+        "rarity": "common"
+      },
+      {
+        "name": "Rubble",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Target",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Tree",
+        "rarity": "common"
+      }
+    ],
+    "transition_theme": "outdoor_waypoint",
+    "wall_theme": "green_shrubs.png"
+  },
+  {
+    "direction": "up",
+    "floor_theme": "light_cobblestone.png",
+    "fog_type": "dim",
+    "generation_type": "dungeon",
+    "monsters": [
+      {
+        "name": "Rat",
+        "rarity": "common"
+      },
+      {
+        "name": "Orc",
+        "rarity": "common"
+      },
+      {
+        "name": "Orc Boss",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Orc Chieftain",
+        "rarity": "rare"
+      },
+      {
+        "name": "Skeleton",
+        "rarity": "common"
+      },
+      {
+        "name": "Bat Swarm",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Animated Armor",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Evil Mage",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Gargoyle",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Wailing Ghost",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Silent Ghost",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Lich",
+        "rarity": "rare"
+      },
+      {
+        "name": "Assassin",
+        "rarity": "rare"
+      },
+      {
+        "name": "Chimera",
+        "rarity": "rare"
+      },
+      {
+        "name": "Imp Devil",
+        "rarity": "rare"
+      },
+      {
+        "name": "Archmage",
+        "rarity": "rare"
+      },
+      {
+        "name": "Efreeti",
+        "rarity": "rare"
+      },
+      {
+        "name": "Griffon",
+        "rarity": "rare"
+      },
+      {
+        "name": "Stone Golem",
+        "rarity": "rare"
+      }
+    ],
+    "name": "Ancient Castle",
+    "special_features": [
+      {
+        "name": "Altar",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Barrel",
+        "rarity": "common"
+      },
+      {
+        "name": "Bookcase",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Brazier",
+        "rarity": "common"
+      },
+      {
+        "name": "Cage",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Candle",
+        "rarity": "common"
+      },
+      {
+        "name": "Chair",
+        "rarity": "common"
+      },
+      {
+        "name": "Cobwebs",
+        "rarity": "common"
+      },
+      {
+        "name": "Cupboard",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Crown",
+        "rarity": "rare"
+      },
+      {
+        "name": "Desk",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Fireplace",
+        "rarity": "common"
+      },
+      {
+        "name": "Lectern",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Mirror",
+        "rarity": "rare"
+      },
+      {
+        "name": "Pile of Weapons and Armor",
+        "rarity": "rare"
+      },
+      {
+        "name": "Rug",
+        "rarity": "common"
+      },
+      {
+        "name": "Stack of Books",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Statue",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Table",
+        "rarity": "common"
+      },
+      {
+        "name": "Throne",
+        "rarity": "rare"
+      },
+      {
+        "name": "Torture Rack",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Weapon Rack",
+        "rarity": "uncommon"
+      }
+    ],
+    "transition_theme": "dungeon_stairs",
+    "wall_theme": "dark_cobblestone.png"
+  },
+  {
+    "direction": "down",
+    "floor_theme": "brown_cavern.png",
+    "fog_type": "dark",
+    "generation_type": "cavern",
+    "monsters": [
+      {
+        "name": "Spider",
+        "rarity": "common"
+      },
+      {
+        "name": "Black Pudding",
+        "rarity": "rare"
+      },
+      {
+        "name": "Bugbear",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Giant Centipede",
+        "rarity": "common"
+      },
+      {
+        "name": "Bat Swarm",
+        "rarity": "common"
+      },
+      {
+        "name": "Brain Eater",
+        "rarity": "rare"
+      },
+      {
+        "name": "Cave Brute",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Cave Creeper",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Centipede Swarm",
+        "rarity": "common"
+      },
+      {
+        "name": "Cloaker",
+        "rarity": "rare"
+      },
+      {
+        "name": "Darkmantle",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Drider",
+        "rarity": "rare"
+      },
+      {
+        "name": "Drow Priestess",
+        "rarity": "rare"
+      },
+      {
+        "name": "Drow",
+        "rarity": "rare"
+      },
+      {
+        "name": "Giant Bat",
+        "rarity": "common"
+      },
+      {
+        "name": "Deep Gnome",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Duergar",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Ettercap",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Gelatinous Cube",
+        "rarity": "rare"
+      },
+      {
+        "name": "Giant Dung Beetle",
+        "rarity": "common"
+      },
+      {
+        "name": "Grick",
+        "rarity": "uncommon"
+      }
+    ],
+    "name": "Dark Caverns",
+    "special_features": [
+      {
+        "name": "Barrel",
+        "rarity": "common"
+      },
+      {
+        "name": "Brazier",
+        "rarity": "common"
+      },
+      {
+        "name": "Cobwebs",
+        "rarity": "common"
+      },
+      {
+        "name": "Crate",
+        "rarity": "common"
+      },
+      {
+        "name": "Fungus",
+        "rarity": "common"
+      },
+      {
+        "name": "Group of Barrels",
+        "rarity": "common"
+      },
+      {
+        "name": "Magic Circle",
+        "rarity": "rare"
+      },
+      {
+        "name": "Mushrooms",
+        "rarity": "common"
+      },
+      {
+        "name": "Rocks",
+        "rarity": "common"
+      },
+      {
+        "name": "Rubble",
+        "rarity": "common"
+      },
+      {
+        "name": "Stack of Crates",
+        "rarity": "common"
+      }
+    ],
+    "transition_theme": "cavern_stairs",
+    "wall_theme": "red_brown_cavern.png"
+  },
+  {
+    "direction": "down",
+    "floor_theme": "red_dirt.png",
+    "fog_type": "dark",
+    "generation_type": "dungeon",
+    "monsters": [
+      {
+        "name": "Rat",
+        "rarity": "common"
+      },
+      {
+        "name": "Skeleton",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Zombie",
+        "rarity": "common"
+      },
+      {
+        "name": "Wailing Ghost",
+        "rarity": "rare"
+      },
+      {
+        "name": "Giant Centipede",
+        "rarity": "common"
+      },
+      {
+        "name": "Lich",
+        "rarity": "rare"
+      },
+      {
+        "name": "Cloaker",
+        "rarity": "rare"
+      },
+      {
+        "name": "Darkmantle",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Ghoul",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Giant Bat",
+        "rarity": "common"
+      },
+      {
+        "name": "Gelatinous Cube",
+        "rarity": "rare"
+      },
+      {
+        "name": "Ghast",
+        "rarity": "rare"
+      },
+      {
+        "name": "Silent Ghost",
+        "rarity": "rare"
+      }
+    ],
+    "name": "Ancient Catacombs",
+    "special_features": [
+      {
+        "name": "Coffin",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Sarcophagus",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Cobwebs",
+        "rarity": "common"
+      },
+      {
+        "name": "Debris",
+        "rarity": "common"
+      },
+      {
+        "name": "Rubble",
+        "rarity": "common"
+      },
+      {
+        "name": "Candle",
+        "rarity": "common"
+      },
+      {
+        "name": "Altar",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Statue",
+        "rarity": "uncommon"
+      }
+    ],
+    "transition_theme": "dungeon_stairs",
+    "wall_theme": "dark_cobblestone.png"
+  },
+  {
+    "direction": "lateral",
+    "floor_theme": "haunted_ground.png",
+    "fog_type": "dim",
+    "generation_type": "outdoor",
+    "monsters": [
+      {
+        "name": "Spider",
+        "rarity": "common"
+      },
+      {
+        "name": "Zombie",
+        "rarity": "common"
+      },
+      {
+        "name": "Scary Face",
+        "rarity": "rare"
+      },
+      {
+        "name": "Bandit",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Bugbear",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Wailing Ghost",
+        "rarity": "rare"
+      },
+      {
+        "name": "Silent Ghost",
+        "rarity": "rare"
+      },
+      {
+        "name": "Harpy",
+        "rarity": "rare"
+      },
+      {
+        "name": "Hobgoblin",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Owlbear",
+        "rarity": "rare"
+      },
+      {
+        "name": "Bat Swarm",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Beastman",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Ghoul",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Giant Bat",
+        "rarity": "common"
+      },
+      {
+        "name": "Ettercap",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Flesh Golem",
+        "rarity": "rare"
+      },
+      {
+        "name": "Ghast",
+        "rarity": "rare"
+      },
+      {
+        "name": "Giant Frog",
+        "rarity": "common"
+      },
+      {
+        "name": "Gnoll",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Weald Hag",
+        "rarity": "elite"
+      }
+    ],
+    "name": "Haunted Forest",
+    "special_features": [
+      {
+        "name": "Barrel",
+        "rarity": "common"
+      },
+      {
+        "name": "Campfire",
+        "rarity": "common"
+      },
+      {
+        "name": "Cobwebs",
+        "rarity": "common"
+      },
+      {
+        "name": "Coffin",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Fungus",
+        "rarity": "common"
+      },
+      {
+        "name": "Logs",
+        "rarity": "common"
+      },
+      {
+        "name": "Rocks",
+        "rarity": "common"
+      },
+      {
+        "name": "Statue",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Tree",
+        "rarity": "common"
+      },
+      {
+        "name": "Well",
+        "rarity": "uncommon"
+      }
+    ],
+    "transition_theme": "outdoor_waypoint",
+    "wall_theme": "haunted_forest_shrubs.png"
+  },
+  {
+    "direction": "down",
+    "floor_theme": "gray_cavern.png",
+    "fog_type": "dim",
+    "generation_type": "dungeon",
+    "monsters": [
+      {
+        "name": "Rat",
+        "rarity": "common"
+      },
+      {
+        "name": "Evil Mage",
+        "rarity": "rare"
+      },
+      {
+        "name": "Assassin",
+        "rarity": "rare"
+      },
+      {
+        "name": "Brain Eater",
+        "rarity": "rare"
+      },
+      {
+        "name": "Cultist Fighter",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Cultist Mage",
+        "rarity": "rare"
+      },
+      {
+        "name": "Imp Devil",
+        "rarity": "rare"
+      },
+      {
+        "name": "Evil Guard",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Flesh Golem",
+        "rarity": "rare"
+      }
+    ],
+    "name": "Cultist Lair",
+    "special_features": [
+      {
+        "name": "Altar",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Barrel",
+        "rarity": "common"
+      },
+      {
+        "name": "Bookcase",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Brazier",
+        "rarity": "common"
+      },
+      {
+        "name": "Cage",
+        "rarity": "common"
+      },
+      {
+        "name": "Candle",
+        "rarity": "common"
+      },
+      {
+        "name": "Chair",
+        "rarity": "common"
+      },
+      {
+        "name": "Cot",
+        "rarity": "common"
+      },
+      {
+        "name": "Crate",
+        "rarity": "common"
+      },
+      {
+        "name": "Cupboard",
+        "rarity": "common"
+      },
+      {
+        "name": "Desk",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Fireplace",
+        "rarity": "common"
+      },
+      {
+        "name": "Group of Barrels",
+        "rarity": "common"
+      },
+      {
+        "name": "Lectern",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Magic Circle",
+        "rarity": "rare"
+      },
+      {
+        "name": "Obelisk",
+        "rarity": "rare"
+      },
+      {
+        "name": "Pool",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Rug",
+        "rarity": "common"
+      },
+      {
+        "name": "Stack of Books",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Stack of Crates",
+        "rarity": "common"
+      },
+      {
+        "name": "Statue",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Stool",
+        "rarity": "common"
+      },
+      {
+        "name": "Table",
+        "rarity": "common"
+      },
+      {
+        "name": "Torture Rack",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Treasure Pile",
+        "rarity": "rare"
+      },
+      {
+        "name": "Weapon Rack",
+        "rarity": "uncommon"
+      }
+    ],
+    "transition_theme": "dungeon_stairs",
+    "wall_theme": "dark_cobblestone.png"
+  },
+  {
+    "direction": "down",
+    "floor_theme": "red_dirt.png",
+    "fog_type": "dim",
+    "generation_type": "cavern",
+    "monsters": [
+      {
+        "name": "Rat",
+        "rarity": "common"
+      },
+      {
+        "name": "Spider",
+        "rarity": "common"
+      },
+      {
+        "name": "Goblin Scout",
+        "rarity": "common"
+      },
+      {
+        "name": "Goblin Warrior",
+        "rarity": "common"
+      },
+      {
+        "name": "Boar",
+        "rarity": "common"
+      },
+      {
+        "name": "Goblin Shaman",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Centipede Swarm",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Giant Bat",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Giant Dung Beetle",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Cave Creeper",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Cave Brute",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Hobgoblin",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Bugbear",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Bat Swarm",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Goblin Boss",
+        "rarity": "rare"
+      },
+      {
+        "name": "Gelatinous Cube",
+        "rarity": "rare"
+      },
+      {
+        "name": "Ogre",
+        "rarity": "rare"
+      }
+    ],
+    "name": "Goblin Lair",
+    "special_features": [
+      {
+        "name": "Barrel",
+        "rarity": "common"
+      },
+      {
+        "name": "Campfire",
+        "rarity": "common"
+      },
+      {
+        "name": "Cobwebs",
+        "rarity": "common"
+      },
+      {
+        "name": "Crate",
+        "rarity": "common"
+      },
+      {
+        "name": "Debris",
+        "rarity": "common"
+      },
+      {
+        "name": "Fungus",
+        "rarity": "common"
+      },
+      {
+        "name": "Logs",
+        "rarity": "common"
+      },
+      {
+        "name": "Mushrooms",
+        "rarity": "common"
+      },
+      {
+        "name": "Pile of Chests",
+        "rarity": "rare"
+      },
+      {
+        "name": "Pile of Weapons and Armor",
+        "rarity": "rare"
+      },
+      {
+        "name": "Pit",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Rocks",
+        "rarity": "common"
+      },
+      {
+        "name": "Rubble",
+        "rarity": "common"
+      },
+      {
+        "name": "Stack of Crates",
+        "rarity": "common"
+      },
+      {
+        "name": "Stool",
+        "rarity": "common"
+      },
+      {
+        "name": "Weapon Rack",
+        "rarity": "uncommon"
+      }
+    ],
+    "transition_theme": "cavern_stairs",
+    "wall_theme": "red_brown_cavern.png"
+  },
+  {
+    "direction": "up",
+    "floor_theme": "light_cracked_stone.png",
+    "fog_type": "dark",
+    "generation_type": "dungeon",
+    "monsters": [
+      {
+        "name": "Spider",
+        "rarity": "common"
+      },
+      {
+        "name": "Evil Lizardfolk",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Gargoyle",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Kobold Spearman",
+        "rarity": "common"
+      },
+      {
+        "name": "Kobold Slinger",
+        "rarity": "common"
+      },
+      {
+        "name": "Kobold Shaman",
+        "rarity": "rare"
+      },
+      {
+        "name": "Kobold Warlock",
+        "rarity": "rare"
+      },
+      {
+        "name": "Medusa",
+        "rarity": "rare"
+      },
+      {
+        "name": "Bat Swarm",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Gorgon",
+        "rarity": "rare"
+      },
+      {
+        "name": "Snow Ape",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Stone Golem",
+        "rarity": "rare"
+      },
+      {
+        "name": "Cyclops",
+        "rarity": "rare"
+      }
+    ],
+    "name": "Forgotten Temple",
+    "special_features": [
+      {
+        "name": "Altar",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Brazier",
+        "rarity": "common"
+      },
+      {
+        "name": "Cage",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Crate",
+        "rarity": "common"
+      },
+      {
+        "name": "Debris",
+        "rarity": "common"
+      },
+      {
+        "name": "Group of Barrels",
+        "rarity": "common"
+      },
+      {
+        "name": "Magic Circle",
+        "rarity": "rare"
+      },
+      {
+        "name": "Obelisk",
+        "rarity": "rare"
+      },
+      {
+        "name": "Pile of Chests",
+        "rarity": "rare"
+      },
+      {
+        "name": "Pile of Weapons and Armor",
+        "rarity": "rare"
+      },
+      {
+        "name": "Rubble",
+        "rarity": "common"
+      },
+      {
+        "name": "Sarcophagus",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Stack of Crates",
+        "rarity": "common"
+      },
+      {
+        "name": "Statue",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Throne",
+        "rarity": "rare"
+      },
+      {
+        "name": "Treasure Pile",
+        "rarity": "rare"
+      },
+      {
+        "name": "Weapon Rack",
+        "rarity": "uncommon"
+      }
+    ],
+    "transition_theme": "dungeon_stairs",
+    "wall_theme": "dark_square_stones.png"
+  },
+  {
+    "direction": "up",
+    "floor_theme": "light_cracked_stone.png",
+    "fog_type": "dark",
+    "generation_type": "dungeon",
+    "monsters": [
+      {
+        "name": "Rat",
+        "rarity": "common"
+      },
+      {
+        "name": "Centipede Swarm",
+        "rarity": "common"
+      },
+      {
+        "name": "Skeleton",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Berserker",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Wailing Ghost",
+        "rarity": "rare"
+      },
+      {
+        "name": "Silent Ghost",
+        "rarity": "rare"
+      },
+      {
+        "name": "Mummy",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Minotaur",
+        "rarity": "rare"
+      },
+      {
+        "name": "Chimera",
+        "rarity": "rare"
+      },
+      {
+        "name": "Deep Gnome",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Efreeti",
+        "rarity": "rare"
+      },
+      {
+        "name": "Gorgon",
+        "rarity": "rare"
+      },
+      {
+        "name": "Iron Golem",
+        "rarity": "rare"
+      },
+      {
+        "name": "Ghoul",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Ghast",
+        "rarity": "rare"
+      },
+      {
+        "name": "Cyclops",
+        "rarity": "rare"
+      }
+    ],
+    "name": "Ancient Temple",
+    "special_features": [
+      {
+        "name": "Altar",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Brazier",
+        "rarity": "common"
+      },
+      {
+        "name": "Candle",
+        "rarity": "common"
+      },
+      {
+        "name": "Crown",
+        "rarity": "rare"
+      },
+      {
+        "name": "Debris",
+        "rarity": "common"
+      },
+      {
+        "name": "Obelisk",
+        "rarity": "rare"
+      },
+      {
+        "name": "Rubble",
+        "rarity": "common"
+      },
+      {
+        "name": "Sarcophagus",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Statue",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Throne",
+        "rarity": "rare"
+      },
+      {
+        "name": "Treasure Pile",
+        "rarity": "rare"
+      },
+      {
+        "name": "Weapon Rack",
+        "rarity": "uncommon"
+      }
+    ],
+    "transition_theme": "dungeon_stairs",
+    "wall_theme": "dark_stone_with_vines.png"
+  },
+  {
+    "direction": "lateral",
+    "floor_theme": "wood_boards.png",
+    "fog_type": "daylight",
+    "generation_type": "city",
+    "indoor_features": [
+      {
+        "name": "Altar",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Bookcase",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Chair",
+        "rarity": "common"
+      },
+      {
+        "name": "Cot",
+        "rarity": "common"
+      },
+      {
+        "name": "Cupboard",
+        "rarity": "common"
+      },
+      {
+        "name": "Desk",
+        "rarity": "common"
+      },
+      {
+        "name": "Fireplace",
+        "rarity": "common"
+      },
+      {
+        "name": "Lectern",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Mirror",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Rug",
+        "rarity": "common"
+      },
+      {
+        "name": "Stack of Books",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Statue",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Table",
+        "rarity": "common"
+      }
+    ],
+    "indoor_monsters": [
+      {
+        "name": "Merchant",
+        "rarity": "common"
+      },
+      {
+        "name": "Innkeeper",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Maid",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Apprentice",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Acolyte",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Hooded Acolyte",
+        "rarity": "uncommon"
+      }
+    ],
+    "monsters": [
+      {
+        "name": "Rat",
+        "rarity": "common"
+      }
+    ],
+    "name": "Merchant Town",
+    "outdoor_features": [
+      {
+        "name": "Barrel",
+        "rarity": "common"
+      },
+      {
+        "name": "Campfire",
+        "rarity": "common"
+      },
+      {
+        "name": "Crate",
+        "rarity": "common"
+      },
+      {
+        "name": "Fountain",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Group of Barrels",
+        "rarity": "common"
+      },
+      {
+        "name": "Stack of Crates",
+        "rarity": "common"
+      },
+      {
+        "name": "Target",
+        "rarity": "common"
+      },
+      {
+        "name": "Well",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Tent",
+        "rarity": "uncommon"
+      }
+    ],
+    "outdoor_monsters": [
+      {
+        "name": "Guard",
+        "rarity": "common"
+      },
+      {
+        "name": "Town Guard",
+        "rarity": "common"
+      },
+      {
+        "name": "Thug",
+        "rarity": "common"
+      },
+      {
+        "name": "Acolyte",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Boar",
+        "rarity": "common"
+      },
+      {
+        "name": "Assassin",
+        "rarity": "rare"
+      }
+    ],
+    "road_theme": "dirt_and_grass.png",
+    "shrub_theme": "green_shrubs.png",
+    "special_features": [],
+    "transition_theme": "outdoor_waypoint",
+    "wall_theme": "dark_square_stones.png"
+  },
+  {
+    "direction": "lateral",
+    "floor_theme": "wood_boards2.png",
+    "fog_type": "dim",
+    "generation_type": "city",
+    "indoor_features": [
+      {
+        "name": "Bookcase",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Chair",
+        "rarity": "common"
+      },
+      {
+        "name": "Crate",
+        "rarity": "common"
+      },
+      {
+        "name": "Cobwebs",
+        "rarity": "common"
+      },
+      {
+        "name": "Cot",
+        "rarity": "common"
+      },
+      {
+        "name": "Cupboard",
+        "rarity": "common"
+      },
+      {
+        "name": "Desk",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Debris",
+        "rarity": "common"
+      },
+      {
+        "name": "Fireplace",
+        "rarity": "common"
+      },
+      {
+        "name": "Lectern",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Mirror",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Rug",
+        "rarity": "common"
+      },
+      {
+        "name": "Stack of Books",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Stool",
+        "rarity": "common"
+      },
+      {
+        "name": "Table",
+        "rarity": "common"
+      }
+    ],
+    "indoor_monsters": [
+      {
+        "name": "Rat",
+        "rarity": "common"
+      },
+      {
+        "name": "Zombie",
+        "rarity": "common"
+      },
+      {
+        "name": "Scary Face",
+        "rarity": "rare"
+      },
+      {
+        "name": "Bat Swarm",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Ghast",
+        "rarity": "rare"
+      },
+      {
+        "name": "Wailing Ghost",
+        "rarity": "rare"
+      },
+      {
+        "name": "Silent Ghost",
+        "rarity": "rare"
+      },
+      {
+        "name": "Night Hag",
+        "rarity": "elite"
+      }
+    ],
+    "monsters": [
+      {
+        "name": "Zombie",
+        "rarity": "common"
+      }
+    ],
+    "name": "Ghost Town",
+    "outdoor_features": [
+      {
+        "name": "Barrel",
+        "rarity": "common"
+      },
+      {
+        "name": "Campfire",
+        "rarity": "common"
+      },
+      {
+        "name": "Cobwebs",
+        "rarity": "common"
+      },
+      {
+        "name": "Coffin",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Group of Barrels",
+        "rarity": "common"
+      },
+      {
+        "name": "Logs",
+        "rarity": "common"
+      },
+      {
+        "name": "Mushrooms",
+        "rarity": "common"
+      },
+      {
+        "name": "Rocks",
+        "rarity": "common"
+      },
+      {
+        "name": "Rubble",
+        "rarity": "common"
+      },
+      {
+        "name": "Tree",
+        "rarity": "common"
+      },
+      {
+        "name": "Well",
+        "rarity": "uncommon"
+      }
+    ],
+    "outdoor_monsters": [
+      {
+        "name": "Spider",
+        "rarity": "common"
+      },
+      {
+        "name": "Zombie",
+        "rarity": "common"
+      },
+      {
+        "name": "Bugbear",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Harpy",
+        "rarity": "rare"
+      },
+      {
+        "name": "Beastman",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Ghoul",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Ettercap",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Giant Frog",
+        "rarity": "common"
+      },
+      {
+        "name": "Gnoll",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Weald Hag",
+        "rarity": "elite"
+      }
+    ],
+    "road_theme": "haunted_ground.png",
+    "shrub_theme": "haunted_forest_shrubs.png",
+    "special_features": [],
+    "transition_theme": "outdoor_waypoint",
+    "wall_theme": "dark_cobblestone.png"
+  },
+  {
+    "direction": "up",
+    "floor_theme": "marble.png",
+    "fog_type": "dim",
+    "generation_type": "dungeon",
+    "monsters": [
+      {
+        "name": "Male Elf",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Female Elf",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Animated Armor",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Apprentice",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Fairy",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Gargoyle",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Chimera",
+        "rarity": "rare"
+      },
+      {
+        "name": "Archmage",
+        "rarity": "rare"
+      },
+      {
+        "name": "Griffon",
+        "rarity": "rare"
+      },
+      {
+        "name": "Iron Golem",
+        "rarity": "rare"
+      },
+      {
+        "name": "Mage",
+        "rarity": "uncommon"
+      }
+    ],
+    "name": "White Palace",
+    "special_features": [
+      {
+        "name": "Altar",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Barrel",
+        "rarity": "common"
+      },
+      {
+        "name": "Bookcase",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Chair",
+        "rarity": "common"
+      },
+      {
+        "name": "Cot",
+        "rarity": "common"
+      },
+      {
+        "name": "Crown",
+        "rarity": "rare"
+      },
+      {
+        "name": "Dais",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Desk",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Fountain",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Lectern",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Magic Circle",
+        "rarity": "rare"
+      },
+      {
+        "name": "Magic Portal",
+        "rarity": "rare"
+      },
+      {
+        "name": "Mirror",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Pedestal",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Pillar",
+        "rarity": "common"
+      },
+      {
+        "name": "Rug",
+        "rarity": "common"
+      },
+      {
+        "name": "Stack of Books",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Statue",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Stool",
+        "rarity": "common"
+      },
+      {
+        "name": "Treasure Pile",
+        "rarity": "rare"
+      },
+      {
+        "name": "Weapon Rack",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Obelisk",
+        "rarity": "rare"
+      },
+      {
+        "name": "Throne",
+        "rarity": "rare"
+      }
+    ],
+    "transition_theme": "dungeon_stairs",
+    "wall_theme": "light_stones.png"
+  },
+  {
+    "direction": "lateral",
+    "floor_theme": "jungle_path.png",
+    "fog_type": "dim",
+    "generation_type": "outdoor",
+    "monsters": [
+      {
+        "name": "Giant Centipede",
+        "rarity": "common"
+      },
+      {
+        "name": "Boar",
+        "rarity": "common"
+      },
+      {
+        "name": "Gorilla",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Giant Bat",
+        "rarity": "common"
+      },
+      {
+        "name": "Bat Swarm",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Mushroomfolk",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Spider",
+        "rarity": "common"
+      },
+      {
+        "name": "Berserker",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Druid",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Evil Lizardfolk",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Fairy",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Gargoyle",
+        "rarity": "rare"
+      },
+      {
+        "name": "Harpy",
+        "rarity": "rare"
+      },
+      {
+        "name": "Beastman",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Centaur",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Cyclops",
+        "rarity": "rare"
+      },
+      {
+        "name": "Dryad",
+        "rarity": "rare"
+      },
+      {
+        "name": "Female Druid",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Giant Dung Beetle",
+        "rarity": "common"
+      },
+      {
+        "name": "Giant Frog",
+        "rarity": "common"
+      },
+      {
+        "name": "Stone Golem",
+        "rarity": "rare"
+      },
+      {
+        "name": "Weald Hag",
+        "rarity": "elite"
+      }
+    ],
+    "name": "Lost Jungle",
+    "special_features": [
+      {
+        "name": "Mushrooms",
+        "rarity": "common"
+      },
+      {
+        "name": "Fungus",
+        "rarity": "common"
+      },
+      {
+        "name": "Logs",
+        "rarity": "common"
+      },
+      {
+        "name": "Campfire",
+        "rarity": "common"
+      },
+      {
+        "name": "Rocks",
+        "rarity": "common"
+      },
+      {
+        "name": "Rubble",
+        "rarity": "common"
+      },
+      {
+        "name": "Pillar",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Statue",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Fountain",
+        "rarity": "rare"
+      },
+      {
+        "name": "Obelisk",
+        "rarity": "rare"
+      },
+      {
+        "name": "Pool",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Tent",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Brazier",
+        "rarity": "uncommon"
+      }
+    ],
+    "transition_theme": "outdoor_waypoint",
+    "wall_theme": "dark_jungle.png"
+  },
+  {
+    "direction": "down",
+    "floor_theme": "mystical.png",
+    "fog_type": "dark",
+    "generation_type": "dungeon",
+    "monsters": [
+      {
+        "name": "Animated Armor",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Apprentice",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Evil Mage",
+        "rarity": "rare"
+      },
+      {
+        "name": "Gargoyle",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Gibbering Mouther",
+        "rarity": "rare"
+      },
+      {
+        "name": "Mimic",
+        "rarity": "rare"
+      },
+      {
+        "name": "Chimera",
+        "rarity": "rare"
+      },
+      {
+        "name": "Doppelganger",
+        "rarity": "rare"
+      },
+      {
+        "name": "Imp Devil",
+        "rarity": "rare"
+      },
+      {
+        "name": "Efreeti",
+        "rarity": "rare"
+      },
+      {
+        "name": "Evil Guard",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Flesh Golem",
+        "rarity": "rare"
+      },
+      {
+        "name": "Hell Hound",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Night Hag",
+        "rarity": "elite"
+      }
+    ],
+    "name": "Wizard's Tower",
+    "special_features": [
+      {
+        "name": "Altar",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Barrel",
+        "rarity": "common"
+      },
+      {
+        "name": "Bookcase",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Brazier",
+        "rarity": "common"
+      },
+      {
+        "name": "Candle",
+        "rarity": "common"
+      },
+      {
+        "name": "Chair",
+        "rarity": "common"
+      },
+      {
+        "name": "Crown",
+        "rarity": "rare"
+      },
+      {
+        "name": "Desk",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Fireplace",
+        "rarity": "common"
+      },
+      {
+        "name": "Group of Barrels",
+        "rarity": "common"
+      },
+      {
+        "name": "Lectern",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Magic Circle",
+        "rarity": "rare"
+      },
+      {
+        "name": "Magic Portal",
+        "rarity": "rare"
+      },
+      {
+        "name": "Mirror",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Pile of Chests",
+        "rarity": "rare"
+      },
+      {
+        "name": "Pool",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Rug",
+        "rarity": "common"
+      },
+      {
+        "name": "Stack of Books",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Stack of Crates",
+        "rarity": "common"
+      },
+      {
+        "name": "Statue",
+        "rarity": "uncommon"
+      },
+      {
+        "name": "Stool",
+        "rarity": "common"
+      },
+      {
+        "name": "Table",
+        "rarity": "common"
+      },
+      {
+        "name": "Throne",
+        "rarity": "rare"
+      },
+      {
+        "name": "Treasure Pile",
+        "rarity": "rare"
+      },
+      {
+        "name": "Weapon Rack",
+        "rarity": "uncommon"
+      }
+    ],
+    "transition_theme": "dungeon_stairs",
+    "wall_theme": "iron_plates.png"
+  }
+]

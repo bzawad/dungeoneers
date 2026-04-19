@@ -1,0 +1,113 @@
+{
+  "by_feature": {
+    "Altar": [
+      "Ancient hinges hide a spring — dust puffs as a needle darts from the stonework.",
+      "You disturb a ward carved shallowly into the base; something bites back."
+    ],
+    "Coffin": [
+      "The lid shifts on a hair trigger; a cloud of dust and a jagged wire lash your forearm.",
+      "Rotten silk hides a spring — splinters drive deep as the sarcophagus bites shut on your hand."
+    ],
+    "Dais": [
+      "A loose flagstone tilts; spikes meant for kneeling supplicants flash upward from the seam.",
+      "You brush carved steps; a counterweight groans and a weighted pendulum swings from the canopy."
+    ],
+    "Desk": [
+      "A drawer runs on a false rail — a needle snaps from the back panel into your knuckles.",
+      "Papers hide a spring; a staple-gun trap fires staples into your palm before you can recoil."
+    ],
+    "Debris": [
+      "Rusty wire loops tight around your wrist as you shift a beam.",
+      "Broken glass and a taut cord slice as weight shifts under your probe."
+    ],
+    "Hut": [
+      "Thatch gives way to a snare line that yanks taut across your shins.",
+      "A peg in the wall is a trigger — a weighted club swings from the ridgepole."
+    ],
+    "Lectern": [
+      "The reading rest pivots; a dart hisses from the lectern's hollow core.",
+      "You tilt the book rest; concealed springs spit splinters into your sleeves."
+    ],
+    "Obelisk": [
+      "Runes flare cold; a needle slides from a carved groove as your palm meets stone.",
+      "Dust on the base hides a pressure plate — a crack opens and something stings your ankle."
+    ],
+    "Pedestal": [
+      "The plinth rotates a finger's width; a wire noose snaps up from the seam.",
+      "You test the mount; a spring-loaded spike thrusts from the column's hidden seam."
+    ],
+    "Pile of Chests": [
+      "A chest lid is wired to its neighbor — latches snap and needles crossfire between the stacks.",
+      "Your pull on one handle trips the pile; iron jaws clamp from a chest you did not touch."
+    ],
+    "Pile of Weapons and Armor": [
+      "A halberd head slips its rest; the blade kisses your shoulder as the pile collapses inward.",
+      "Mail links hide a tripwire — rusted hooks bite as the heap shifts under your weight."
+    ],
+    "Pit": [
+      "False boards snap; cold air rushes up as the pit mouth opens underfoot.",
+      "Your weight breaks a rotten cover; something sharp waits in the dark a span below."
+    ],
+    "Pool": [
+      "You lean over still water; a glassed needle launches from the coping into your reflection.",
+      "Slippery stone hides a spring — your hand skids and a metal tooth scores your palm."
+    ],
+    "Quicksand": [
+      "The crust looks solid; one step and wet sand claws at your boots and will not let go.",
+      "Dry surface shatters; the pit pulls at your calves faster than you can step back."
+    ],
+    "Rocks": [
+      "A balanced stone tilts; crushed grit and a sharp edge rake your fingers.",
+      "You shift a slab; a concealed spring drives a splinter through your glove."
+    ],
+    "Rubble": [
+      "Broken brick hides a spring — dust and a sting answer your reach into the heap.",
+      "A wire runs through the collapse; it snaps taut across your wrist as stones shift."
+    ],
+    "Rug": [
+      "The weave hides a pressure plate; a needle thrusts from the floorboards beneath.",
+      "You tug an edge; a concealed latch flips and wire bites your wrist."
+    ],
+    "Sarcophagus": [
+      "Carved reliefs are a switch; a dart hisses from the lid's lip as it lifts a hair.",
+      "Ancient seals break; something sharp in the joint rewards your curiosity."
+    ],
+    "Stack of Books": [
+      "A false volume pivots; a needle darts from the spine gap of the neighbor tome.",
+      "Weight on the stack trips a cord — weighted folios slam shut on your fingers."
+    ],
+    "Stack of Crates": [
+      "A crate shifts on a hair trigger; nails and splinters shear upward from the gap below.",
+      "You pry a lid; a second crate's latch snaps and fishhooks bite your forearm."
+    ],
+    "Statue": [
+      "The base is hollow; your touch frees a counterweight and a blade scribes your shin.",
+      "Dust hides a spring in the plinth — pain answers before you see the mechanism move."
+    ],
+    "Tent": [
+      "A guy line is a snare; it whips tight as you brush the canvas flap.",
+      "Peg and rope hide a spring — a needle flashes from the tent pole's collar."
+    ],
+    "Throne": [
+      "The armrest is a lever; hidden springs spit splinters into your sleeve.",
+      "You test the cushion; a needle thrusts from the seat through fabric and padding."
+    ],
+    "Torture Rack": [
+      "Rusty gears bite; a ratchet slips and the wheel spins, catching your sleeve and your skin.",
+      "Straps hide fishhooks; they bite as you trace the leather with your hand."
+    ],
+    "Treasure Pile": [
+      "Coins shift on a plate; a needle thrusts from the heap's heart as you dig.",
+      "Glinting trash hides wire — it loops and cuts as weight slides under your reach."
+    ],
+    "Well": [
+      "The coping stone tilts; your balance fails and iron teeth scrape your shin on the rim.",
+      "You lean on the windlass; a catch releases and the handle spins, cracking your knuckles."
+    ]
+  },
+  "default": [
+    "A concealed needle flashes as you lean too close.",
+    "Dust flies — and something sharp answers your probing hand.",
+    "Your probe springs a hidden catch; pain follows faster than thought."
+  ]
+}

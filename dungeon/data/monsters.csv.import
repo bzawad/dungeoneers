@@ -1,0 +1,17 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://b1ya2p8qm524p"
+
+[deps]
+
+files=["res://dungeon/data/monsters.image.translation", "res://dungeon/data/monsters.armor.translation", "res://dungeon/data/monsters.hit.translation", "res://dungeon/data/monsters.attack.translation", "res://dungeon/data/monsters.damage.translation", "res://dungeon/data/monsters.weapon.translation", "res://dungeon/data/monsters.treasure.translation", "res://dungeon/data/monsters.rarity.translation", "res://dungeon/data/monsters.size.translation", "res://dungeon/data/monsters.role.translation", "res://dungeon/data/monsters.hunts.translation", "res://dungeon/data/monsters.challenge.translation", "res://dungeon/data/monsters.alignment.translation"]
+
+source_file="res://dungeon/data/monsters.csv"
+dest_files=["res://dungeon/data/monsters.image.translation", "res://dungeon/data/monsters.armor.translation", "res://dungeon/data/monsters.hit.translation", "res://dungeon/data/monsters.attack.translation", "res://dungeon/data/monsters.damage.translation", "res://dungeon/data/monsters.weapon.translation", "res://dungeon/data/monsters.treasure.translation", "res://dungeon/data/monsters.rarity.translation", "res://dungeon/data/monsters.size.translation", "res://dungeon/data/monsters.role.translation", "res://dungeon/data/monsters.hunts.translation", "res://dungeon/data/monsters.challenge.translation", "res://dungeon/data/monsters.alignment.translation"]
+
+[params]
+
+compress=true
+delimiter=0

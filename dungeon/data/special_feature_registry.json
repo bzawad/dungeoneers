@@ -1,0 +1,222 @@
+[
+  {
+    "name": "Altar",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Barrel",
+    "rarity": "common"
+  },
+  {
+    "name": "Bookcase",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Brazier",
+    "rarity": "common"
+  },
+  {
+    "name": "Cage",
+    "rarity": "common"
+  },
+  {
+    "name": "Campfire",
+    "rarity": "common"
+  },
+  {
+    "name": "Candle",
+    "rarity": "common"
+  },
+  {
+    "name": "Chair",
+    "rarity": "common"
+  },
+  {
+    "name": "Cobwebs",
+    "rarity": "common"
+  },
+  {
+    "name": "Coffin",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Cot",
+    "rarity": "common"
+  },
+  {
+    "name": "Crate",
+    "rarity": "common"
+  },
+  {
+    "name": "Crown",
+    "rarity": "rare"
+  },
+  {
+    "name": "Cupboard",
+    "rarity": "common"
+  },
+  {
+    "name": "Dais",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Debris",
+    "rarity": "common"
+  },
+  {
+    "name": "Desk",
+    "rarity": "common"
+  },
+  {
+    "name": "Fence",
+    "rarity": "common"
+  },
+  {
+    "name": "Fireplace",
+    "rarity": "common"
+  },
+  {
+    "name": "Fountain",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Fungus",
+    "rarity": "common"
+  },
+  {
+    "name": "Group of Barrels",
+    "rarity": "common"
+  },
+  {
+    "name": "Hut",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Lectern",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Logs",
+    "rarity": "common"
+  },
+  {
+    "name": "Magic Circle",
+    "rarity": "rare"
+  },
+  {
+    "name": "Magic Portal",
+    "rarity": "rare"
+  },
+  {
+    "name": "Mirror",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Mushrooms",
+    "rarity": "common"
+  },
+  {
+    "name": "Obelisk",
+    "rarity": "rare"
+  },
+  {
+    "name": "Pedestal",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Pile of Chests",
+    "rarity": "rare"
+  },
+  {
+    "name": "Pile of Weapons and Armor",
+    "rarity": "rare"
+  },
+  {
+    "name": "Pillar",
+    "rarity": "common"
+  },
+  {
+    "name": "Pit",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Plant",
+    "rarity": "common"
+  },
+  {
+    "name": "Pool",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Quicksand",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Rocks",
+    "rarity": "common"
+  },
+  {
+    "name": "Rubble",
+    "rarity": "common"
+  },
+  {
+    "name": "Rug",
+    "rarity": "common"
+  },
+  {
+    "name": "Sarcophagus",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Stack of Books",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Stack of Crates",
+    "rarity": "common"
+  },
+  {
+    "name": "Statue",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Stool",
+    "rarity": "common"
+  },
+  {
+    "name": "Table",
+    "rarity": "common"
+  },
+  {
+    "name": "Target",
+    "rarity": "common"
+  },
+  {
+    "name": "Tent",
+    "rarity": "common"
+  },
+  {
+    "name": "Throne",
+    "rarity": "rare"
+  },
+  {
+    "name": "Torture Rack",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Treasure Pile",
+    "rarity": "elite"
+  },
+  {
+    "name": "Tree",
+    "rarity": "common"
+  },
+  {
+    "name": "Weapon Rack",
+    "rarity": "uncommon"
+  },
+  {
+    "name": "Well",
+    "rarity": "uncommon"
+  }
+]
