@@ -7,6 +7,7 @@ extends Control
 ## **Ops / logs:** stdout from this process is plain text. For rotation under a service manager, pipe or redirect
 ## (e.g. shell `>>` to dated files, or your platform’s log shipper). Same idea as [code]gama/start_server.sh[/code] loop + PID file.
 ## Optional [code]--metrics-interval-sec N[/code] prints one machine-parsable line per interval; [code]--metrics-file path[/code] appends the same line.
+## [code]--debug-net[/code] enables replication net size logs (Phase 8), same as [code]Main.gd --server[/code].
 
 const DEFAULT_PORT := 12345
 const MAX_CLIENTS := 8
@@ -73,6 +74,8 @@ func _ready() -> void:
 
 	_rep = r["replication"]
 	_net_host = r["net_host"]
+	if bool(cfg.get("debug_net", false)) and _rep.has_method("set_debug_net"):
+		_rep.set_debug_net(true)
 
 	_append_log(
 		(
@@ -213,6 +216,7 @@ func _host_flags_from_args(args: PackedStringArray) -> Dictionary:
 	var fog_type_cli := ""
 	var torch_reveals := true
 	var smoke_torch_expire_probe := false
+	var debug_net := false
 
 	var i := 0
 	while i < args.size():
@@ -244,6 +248,8 @@ func _host_flags_from_args(args: PackedStringArray) -> Dictionary:
 				torch_reveals = false
 			"--smoke-torch-expire-probe":
 				smoke_torch_expire_probe = true
+			"--debug-net":
+				debug_net = true
 			_:
 				pass
 		i += 1
@@ -257,6 +263,7 @@ func _host_flags_from_args(args: PackedStringArray) -> Dictionary:
 		"fog_type_cli": fog_type_cli,
 		"torch_reveals": torch_reveals,
 		"smoke_torch_expire_probe": smoke_torch_expire_probe,
+		"debug_net": debug_net,
 	}
 
 

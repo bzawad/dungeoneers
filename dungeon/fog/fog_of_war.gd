@@ -14,6 +14,15 @@ static func square_revealed(cell: Vector2i, revealed: Dictionary, fog_enabled: b
 	return revealed.has(cell)
 
 
+## Explorer `FogOfWar.show_door_trap?/4` — trap badge on doors / trapped treasure when fog is off or cell was clicked.
+static func show_trap_icon_on_cell(
+	fog_enabled: bool, fog_clicked_cells: Dictionary, cell: Vector2i
+) -> bool:
+	if not fog_enabled:
+		return true
+	return fog_clicked_cells.has(cell)
+
+
 ## Explorer `FogOfWar.can_reveal_square?/5` — click-to-reveal minesweeper (axis box radius from player).
 static func can_reveal_fog_click_cell(
 	click_cell: Vector2i,

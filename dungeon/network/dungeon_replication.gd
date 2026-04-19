@@ -217,7 +217,7 @@ var _server_special_item_dismiss_xp_pending: Dictionary = {}
 var _server_investigated_features: Dictionary = {}
 ## Server: peer awaiting feature-trap damage after first dialog (Explorer trap dialog → `dismiss_trap`).
 var _server_feature_trap_pending: Dictionary = {}
-## Server: cumulative logical tile overrides vs pristine seed regen (late joiners replay via `rpc_authority_tile_patch`).
+## Server: cumulative logical tile overrides vs pristine seed regen (late join + live coalesced `rpc_authority_tile_patch_batch`).
 var _server_authority_tile_patches: Dictionary = {}
 ## Client (networked): grid after welcome + all `rpc_authority_tile_patch` (for headless probes / parity checks).
 var _client_merged_grid: Dictionary = {}
@@ -258,6 +258,10 @@ var _torch_count_by_peer: Dictionary = {}
 var _smoke_torch_expire_probe_server: bool = false
 ## P7-15: `--debug-net` logs packed patch batch sizes on the server.
 var _debug_net: bool = false
+## Phase 8 / P7-14: coalesce live `rpc_authority_tile_patch` into one end-of-frame `rpc_authority_tile_patch_batch`.
+const LIVE_TILE_PATCH_RPC_BATCHING := true
+var _live_tile_patch_rpc_pending: Dictionary = {}
+var _live_tile_patch_rpc_flush_queued: bool = false
 ## Phase 3: ENet listen port and process boot time (UTC unix sec) for welcome payload; set via `set_server_listen_metadata`.
 var _server_listen_port: int = 0
 var _server_boot_unix_sec: int = 0
@@ -411,6 +415,8 @@ func configure_authority(
 	_server_investigated_features.clear()
 	_server_feature_trap_pending.clear()
 	_server_authority_tile_patches.clear()
+	_live_tile_patch_rpc_pending.clear()
+	_live_tile_patch_rpc_flush_queued = false
 	_client_merged_grid.clear()
 	_authority_doors_broken_count = 0
 	_authority_guards_hostile = false
@@ -931,7 +937,43 @@ func _notify_authority_tile_patch(cell: Vector2i, new_tile: String) -> void:
 	if _using_solo_local():
 		return
 	if multiplayer.multiplayer_peer != null and multiplayer.is_server():
-		rpc_authority_tile_patch.rpc(cell.x, cell.y, new_tile)
+		_server_queue_live_authority_tile_patch_rpc(cell, new_tile)
+
+
+func _server_queue_live_authority_tile_patch_rpc(cell: Vector2i, new_tile: String) -> void:
+	_live_tile_patch_rpc_pending[cell] = new_tile
+	if _live_tile_patch_rpc_flush_queued:
+		return
+	_live_tile_patch_rpc_flush_queued = true
+	call_deferred("_flush_live_authority_tile_patch_rpc_queue")
+
+
+func _flush_live_authority_tile_patch_rpc_queue() -> void:
+	_live_tile_patch_rpc_flush_queued = false
+	if _using_solo_local() or multiplayer.multiplayer_peer == null or not multiplayer.is_server():
+		_live_tile_patch_rpc_pending.clear()
+		return
+	if _live_tile_patch_rpc_pending.is_empty():
+		return
+	var pending: Dictionary = _live_tile_patch_rpc_pending.duplicate(true)
+	_live_tile_patch_rpc_pending.clear()
+	var packed: PackedByteArray = GridTilePatchCodec.pack_sorted_patches(pending)
+	if packed.is_empty():
+		var nfb := 0
+		for cell_fb in pending:
+			var ntfb: String = str(pending[cell_fb])
+			rpc_authority_tile_patch.rpc(cell_fb.x, cell_fb.y, ntfb)
+			nfb += 1
+		print("[Dungeoneers] live_tile_patch_rpc_fallback count=", nfb)
+		return
+	if _debug_net:
+		print(
+			"[Dungeoneers] net_debug tile_patch_batch_live patches=",
+			pending.size(),
+			" packed_bytes=",
+			packed.size()
+		)
+	rpc_authority_tile_patch_batch.rpc(packed)
 
 
 ## Late join replays logical tile overrides. **P7-14 / P7-15:** one `rpc_authority_tile_patch_batch` with a packed blob
@@ -3783,6 +3825,8 @@ func _server_apply_map_transition(kind: String, raw_tile: String) -> void:
 	_authority_seed = new_seed
 	_authority_grid = new_grid
 	_server_authority_tile_patches.clear()
+	_live_tile_patch_rpc_pending.clear()
+	_live_tile_patch_rpc_flush_queued = false
 	_authority_checksum = chk
 	_authority_theme_name = str(gen.get("theme", next_theme_name))
 	_dungeon_level = next_dungeon_level

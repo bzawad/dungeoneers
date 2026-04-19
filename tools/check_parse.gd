@@ -46,6 +46,7 @@ func _init() -> void:
 		"res://dungeon/ui/explorer_modal_chrome.gd",
 		"res://dungeon/ui/dungeon_session.gd",
 		"res://dungeon/ui/dungeon_tile_assets.gd",
+		"res://dungeon/ui/map_cell_overlay_art.gd",
 		"res://dungeon/ui/dungeon_door_overlays.gd",
 		"res://dungeon/network/dungeon_replication.gd",
 		"res://dungeon/network/grid_tile_patch_codec.gd",
@@ -531,6 +532,38 @@ func _init() -> void:
 		)
 		quit(1)
 		return
+	for reg_item in reg_parsed as Array:
+		if reg_item is not Dictionary:
+			continue
+		var rd: Dictionary = reg_item
+		var img := str(rd.get("image", "")).strip_edges()
+		if img.is_empty():
+			push_error("check_parse: registry row missing image for " + str(rd.get("name", "")))
+			quit(1)
+			return
+	const MapCellOverlayArt := preload("res://dungeon/ui/map_cell_overlay_art.gd")
+	MapCellOverlayArt.assert_registry_has_images_for_ci()
+	var exp_chest := MapCellOverlayArt.expected_png_res_for_tile("treasure")
+	if not exp_chest.ends_with("/images/chest.png"):
+		push_error("check_parse: map overlay treasure path drift")
+		quit(1)
+		return
+	if not MapCellOverlayArt.expected_png_res_for_tile("special_feature|F1|Barrel").ends_with(
+		"/special_features/barrel.png"
+	):
+		push_error("check_parse: map overlay special feature path drift")
+		quit(1)
+		return
+	if MapCellOverlayArt.expected_png_res_for_tile("special_feature|F1|Pillar") != "":
+		push_error("check_parse: pillar should not use flat overlay path")
+		quit(1)
+		return
+	if not MapCellOverlayArt.expected_png_res_for_tile("waypoint|2").ends_with(
+		"/map_links/outdoor_waypoint2.png"
+	):
+		push_error("check_parse: map overlay waypoint path drift")
+		quit(1)
+		return
 	for seed_i in range(30):
 		var rfeat := RandomNumberGenerator.new()
 		rfeat.seed = 10_001 + seed_i
@@ -542,6 +575,48 @@ func _init() -> void:
 			)
 			quit(1)
 			return
+	var city_enc_theme: Dictionary = {
+		"fog_type": "daylight",
+		"monsters": [],
+		"indoor_monsters": [{"name": "Merchant", "rarity": "common"}],
+	}
+	for seed_ce in range(80):
+		var rng_ce := RandomNumberGenerator.new()
+		rng_ce.seed = 50_000 + seed_ce
+		var got_m := GenFeat.pick_monster_for_city_encounter(city_enc_theme, true, rng_ce, 1)
+		var theme_clone: Dictionary = city_enc_theme.duplicate()
+		theme_clone["monsters"] = (city_enc_theme.get("indoor_monsters", []) as Array).duplicate()
+		var rng_ce2 := RandomNumberGenerator.new()
+		rng_ce2.seed = 50_000 + seed_ce
+		var want_m := GenFeat.pick_monster_for_theme_with_fog_type(theme_clone, rng_ce2, 1, 1)
+		if got_m != want_m:
+			push_error(
+				"check_parse: city encounter pick must match Explorer monsters swap + fog pick (Phase 7)"
+			)
+			quit(1)
+			return
+	var cf_theme: Dictionary = {
+		"indoor_features":
+		[
+			{"name": "Desk", "rarity": "common"},
+			{"name": "Table", "rarity": "common"},
+		],
+		"special_features": [{"name": "Barrel", "rarity": "common"}],
+	}
+	for seed_cf in range(600):
+		var rng_cf := RandomNumberGenerator.new()
+		rng_cf.seed = 60_000 + seed_cf
+		var fn := GenFeat.pick_city_feature_name(cf_theme, true, rng_cf)
+		if fn != "Desk" and fn != "Table":
+			push_error("check_parse: city indoor feature must draw only from theme list (Phase 7)")
+			quit(1)
+			return
+	var rng_empty_feat := RandomNumberGenerator.new()
+	rng_empty_feat.seed = 70_007
+	if not GenFeat.pick_city_feature_name({"indoor_features": []}, true, rng_empty_feat).is_empty():
+		push_error("check_parse: empty city feature list must not pick a name (Phase 7)")
+		quit(1)
+		return
 	var vp_cells: Array[Vector2i] = [Vector2i(5, 5), Vector2i(6, 6)]
 	var raw_x := "encounter|Etest|Rat"
 	var grid_resolve: Dictionary = {
@@ -1199,18 +1274,32 @@ func _init() -> void:
 		quit(1)
 		return
 	const ExplorerAudioScript := preload("res://dungeon/audio/explorer_audio.gd")
-	if ExplorerAudioScript.combat_sfx_basename_for_sound_id("monster_hit") != "monster_hit.mp3":
-		push_error("check_parse: explorer_audio combat_sfx monster_hit basename")
-		quit(1)
-		return
-	if ExplorerAudioScript.combat_sfx_basename_for_sound_id("fight") != "fight.mp3":
-		push_error("check_parse: explorer_audio combat_sfx fight basename")
-		quit(1)
-		return
+	const _explorer_combat_sound_ids: Array[String] = [
+		"fight",
+		"monster_hit",
+		"monster_miss",
+		"player_hit",
+		"player_miss",
+	]
+	for _ci in range(_explorer_combat_sound_ids.size()):
+		var _csid: String = _explorer_combat_sound_ids[_ci]
+		var _cbn := ExplorerAudioScript.combat_sfx_basename_for_sound_id(_csid)
+		var _cexp := _csid + ".mp3"
+		if _cbn != _cexp:
+			push_error("check_parse: explorer_audio combat_sfx basename %s" % _csid)
+			quit(1)
+			return
 	if not ExplorerAudioScript.combat_sfx_basename_for_sound_id("unknown_sound").is_empty():
 		push_error("check_parse: explorer_audio combat_sfx unknown empty")
 		quit(1)
 		return
+	for _pi in range(ExplorerAudioScript.EXPLORER_PLAY_AUDIO_SOUND_IDS.size()):
+		var _play_id: String = ExplorerAudioScript.EXPLORER_PLAY_AUDIO_SOUND_IDS[_pi]
+		var _asset := "res://assets/explorer/audio/" + _play_id + ".mp3"
+		if not ResourceLoader.exists(_asset):
+			push_error("check_parse: explorer_audio missing play_audio asset %s" % _asset)
+			quit(1)
+			return
 	if ExplorerAudioScript.clamp_wander_resume_seconds(null, 3.5) != 3.5:
 		push_error("check_parse: explorer_audio clamp null stream")
 		quit(1)
@@ -1247,6 +1336,12 @@ func _init() -> void:
 		return
 	if int(DungeonReplication.TRAP_DISARM_XP_TREASURE) != 10:
 		push_error("check_parse: TRAP_DISARM_XP_TREASURE must match Explorer trap disarm XP")
+		quit(1)
+		return
+	if not bool(DungeonReplication.LIVE_TILE_PATCH_RPC_BATCHING):
+		push_error(
+			"check_parse: LIVE_TILE_PATCH_RPC_BATCHING must stay true (Phase 8 live tile RPC coalescing)"
+		)
 		quit(1)
 		return
 	for s in range(200):
@@ -1322,6 +1417,25 @@ func _init() -> void:
 		return
 	if PartyMarkerArt.facing_from_grid_step(Vector2i(2, -1)) != PartyMarkerArt.FACING_RIGHT:
 		push_error("check_parse: MOV-01 diagonal prefers horizontal facing")
+		quit(1)
+		return
+	if PartyMarkerArt.facing_from_grid_step(Vector2i(-1, 1)) != PartyMarkerArt.FACING_LEFT:
+		push_error("check_parse: MOV-01 diagonal (-1,1) prefers horizontal -> left")
+		quit(1)
+		return
+	var walk_frames := PartyMarkerArt.walk_frame_textures("rogue", 0)
+	if walk_frames.size() != 1:
+		push_error(
+			"check_parse: Phase 6 default assets must expose exactly one walk frame per facing (got ",
+			str(walk_frames.size()),
+			")"
+		)
+		quit(1)
+		return
+	if walk_frames[0] == null:
+		push_error(
+			"check_parse: Phase 6 walk_frame_textures base must be non-null for rogue facing 0"
+		)
 		quit(1)
 		return
 	## FOG-01 follow-up: traditional rect R1 — Explorer `get_room_surrounding_squares` includes y = ry+rh+1 (extra row below).

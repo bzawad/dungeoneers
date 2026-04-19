@@ -2,8 +2,10 @@ extends RefCounted
 
 ## Phase 5.6: Explorer `map_template.ex` uses `/images/characters/rogue1_N.png` / `rogue2_N.png` (N=0..3 for facing).
 ## **MOV-01:** map markers pick N from the last orthogonal/diagonal grid step (same 0..3 convention as **gama** `Player.gd`).
+## **Phase 6:** optional walk in-betweens: `rogue2_{N}_w1.png`, `rogue2_{N}_w2.png`, … (same role resolution as facing art).
 
 const CHAR_DIR := "res://assets/explorer/images/characters/"
+const WALK_ANIM_FPS := 8.0
 
 ## Matches **gama** `Player.update_state`: 0 = down (+grid y), 1 = up, 2 = left, 3 = right.
 const FACING_DOWN := 0
@@ -51,6 +53,63 @@ static func _texture_for_role_facing_try(role: String, f: int) -> Texture2D:
 		if t3 != null:
 			return t3
 	return null
+
+
+## Optional extra frame for facing `f` (1-based index `walk_i`: *_w1.png, *_w2.png, …). Same basename order as `_texture_for_role_facing_try`.
+static func _texture_walk_frame_try(role: String, f: int, walk_i: int) -> Texture2D:
+	var r := role.strip_edges().to_lower()
+	var fi := posmod(int(f), 4)
+	if r.contains("fighter"):
+		for pat in ["fighter2_%d_w%d.png", "fighter1_%d_w%d.png", "fighter_%d_w%d.png"]:
+			var t := _load_png(CHAR_DIR + (pat % [fi, walk_i]))
+			if t != null:
+				return t
+		for pat2 in ["rogue1_%d_w%d.png", "rogue2_%d_w%d.png"]:
+			var t2 := _load_png(CHAR_DIR + (pat2 % [fi, walk_i]))
+			if t2 != null:
+				return t2
+		return null
+	for pat3 in ["rogue2_%d_w%d.png", "rogue1_%d_w%d.png"]:
+		var t3 := _load_png(CHAR_DIR + (pat3 % [fi, walk_i]))
+		if t3 != null:
+			return t3
+	return null
+
+
+## Base facing frame plus any `*_w1.png`, `*_w2.png`, … for that facing. Single element when no walk extras are synced.
+static func walk_frame_textures(role: String, facing: int) -> Array[Texture2D]:
+	var out: Array[Texture2D] = []
+	var base := texture_for_role_facing(role, facing)
+	if base == null:
+		base = _texture_south_only(role)
+	if base == null:
+		return out
+	out.append(base)
+	var wi := 1
+	while wi <= 32:
+		var ex := _texture_walk_frame_try(role, facing, wi)
+		if ex == null:
+			break
+		out.append(ex)
+		wi += 1
+	return out
+
+
+## Returns a plain `Texture2D` for the marker: single frame as-is, or `AnimatedTexture` when multiple walk frames exist.
+static func make_walk_display_texture(
+	role: String, facing: int, fps: float = WALK_ANIM_FPS
+) -> Texture2D:
+	var fr := walk_frame_textures(role, facing)
+	if fr.is_empty():
+		return null
+	if fr.size() == 1:
+		return fr[0]
+	var at := AnimatedTexture.new()
+	at.frames = fr.size()
+	at.fps = fps
+	for i in range(fr.size()):
+		at.set_frame_texture(i, fr[i])
+	return at
 
 
 ## `facing` is `FACING_*` (0..3). Falls back to south (`*_0`) then `_texture_south_only` if art missing for that frame.

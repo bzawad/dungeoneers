@@ -1,222 +1,332 @@
 [
   {
+    "image": "altar.png",
     "name": "Altar",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 1.5
   },
   {
+    "image": "barrel.png",
     "name": "Barrel",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 0.75
   },
   {
+    "image": "bookcase.png",
     "name": "Bookcase",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 1.5
   },
   {
+    "image": "brazier.png",
     "name": "Brazier",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.0
   },
   {
+    "image": "cage.png",
     "name": "Cage",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.75
   },
   {
+    "image": "campfire.png",
     "name": "Campfire",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.0
   },
   {
+    "image": "candle.png",
     "name": "Candle",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 0.75
   },
   {
+    "image": "chair.png",
     "name": "Chair",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.0
   },
   {
+    "image": "cobwebs.png",
     "name": "Cobwebs",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 2.0
   },
   {
+    "image": "coffin.png",
     "name": "Coffin",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 1.5
   },
   {
+    "image": "cot.png",
     "name": "Cot",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.5
   },
   {
+    "image": "crate.png",
     "name": "Crate",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.0
   },
   {
+    "image": "crown.png",
     "name": "Crown",
-    "rarity": "rare"
+    "rarity": "rare",
+    "size": 0.75
   },
   {
+    "image": "cupboard.png",
     "name": "Cupboard",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.5
   },
   {
+    "image": "dais.png",
     "name": "Dais",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 3.0
   },
   {
+    "image": "debris.png",
     "name": "Debris",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 2.0
   },
   {
+    "image": "desk.png",
     "name": "Desk",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.0
   },
   {
+    "image": "fence.png",
     "name": "Fence",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.25
   },
   {
+    "image": "fireplace.png",
     "name": "Fireplace",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.5
   },
   {
+    "image": "fountain.png",
     "name": "Fountain",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 2.0
   },
   {
+    "image": "fungus.png",
     "name": "Fungus",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.0
   },
   {
+    "image": "group_of_barrels.png",
     "name": "Group of Barrels",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.0
   },
   {
+    "image": "hut.png",
     "name": "Hut",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 3.0
   },
   {
+    "image": "lectern.png",
     "name": "Lectern",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 1.0
   },
   {
+    "image": "logs.png",
     "name": "Logs",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 0.75
   },
   {
+    "image": "magic_circle.png",
     "name": "Magic Circle",
-    "rarity": "rare"
+    "rarity": "rare",
+    "size": 2.0
   },
   {
+    "image": "magic_portal.png",
     "name": "Magic Portal",
-    "rarity": "rare"
+    "rarity": "rare",
+    "size": 2.0
   },
   {
+    "image": "mirror.png",
     "name": "Mirror",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 1.0
   },
   {
+    "image": "mushrooms.png",
     "name": "Mushrooms",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 0.75
   },
   {
+    "image": "obelisk.png",
     "name": "Obelisk",
-    "rarity": "rare"
+    "rarity": "rare",
+    "size": 2.0
   },
   {
+    "image": "pedestal.png",
     "name": "Pedestal",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 1.0
   },
   {
+    "image": "pile_of_chests.png",
     "name": "Pile of Chests",
-    "rarity": "rare"
+    "rarity": "rare",
+    "size": 1.5
   },
   {
+    "image": "pile_of_weapons_and_armor.png",
     "name": "Pile of Weapons and Armor",
-    "rarity": "rare"
+    "rarity": "rare",
+    "size": 1.25
   },
   {
+    "image": "pillar.png",
     "name": "Pillar",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 2.0
   },
   {
+    "image": "pit.png",
     "name": "Pit",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 1.25
   },
   {
+    "image": "plant.png",
     "name": "Plant",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.25
   },
   {
+    "image": "pool.png",
     "name": "Pool",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 3.0
   },
   {
+    "image": "quicksand.png",
     "name": "Quicksand",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 3.0
   },
   {
+    "image": "rocks.png",
     "name": "Rocks",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.5
   },
   {
+    "image": "rubble.png",
     "name": "Rubble",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.75
   },
   {
+    "image": "rug.png",
     "name": "Rug",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 2.0
   },
   {
+    "image": "sarcophagus.png",
     "name": "Sarcophagus",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 1.75
   },
   {
+    "image": "stack_of_books.png",
     "name": "Stack of Books",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 0.75
   },
   {
+    "image": "stack_of_crates.png",
     "name": "Stack of Crates",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.0
   },
   {
+    "image": "statue.png",
     "name": "Statue",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 1.5
   },
   {
+    "image": "stool.png",
     "name": "Stool",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 0.75
   },
   {
+    "image": "table.png",
     "name": "Table",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.25
   },
   {
+    "image": "target.png",
     "name": "Target",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 1.0
   },
   {
+    "image": "tent.png",
     "name": "Tent",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 2.0
   },
   {
+    "image": "throne.png",
     "name": "Throne",
-    "rarity": "rare"
+    "rarity": "rare",
+    "size": 1.0
   },
   {
+    "image": "torture_rack.png",
     "name": "Torture Rack",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 1.75
   },
   {
+    "image": "treasure_pile.png",
     "name": "Treasure Pile",
-    "rarity": "elite"
+    "rarity": "elite",
+    "size": 2.0
   },
   {
+    "image": "tree.png",
     "name": "Tree",
-    "rarity": "common"
+    "rarity": "common",
+    "size": 2.5
   },
   {
+    "image": "weapon_rack.png",
     "name": "Weapon Rack",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 1.25
   },
   {
+    "image": "well.png",
     "name": "Well",
-    "rarity": "uncommon"
+    "rarity": "uncommon",
+    "size": 1.5
   }
 ]

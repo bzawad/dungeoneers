@@ -1,5 +1,7 @@
 # Explorer LiveView dialog semantics → Dungeoneers (Godot)
 
+**Map grid rasters & labels (Phase 5 / P7-12):** see [`explorer_map_to_godot.md`](explorer_map_to_godot.md).
+
 Authoritative Explorer sources: [`dialog_component.ex`](../../dungeon_explorer/lib/dungeon_web/components/dialog_component.ex) (modal chrome), [`map_template.ex`](../../dungeon_explorer/lib/dungeon_web/live/dungeon_live/map_template.ex) (per-flow `color_scheme` / buttons). Godot implementation: [`explorer_modal_chrome.gd`](../dungeon/ui/explorer_modal_chrome.gd), applied from [`dungeon_session.gd`](../dungeon/ui/dungeon_session.gd).
 
 ## Class / CSS → Godot mapping

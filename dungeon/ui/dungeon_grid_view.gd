@@ -13,6 +13,7 @@ const DungeonDoorOverlays := preload("res://dungeon/ui/dungeon_door_overlays.gd"
 const GridWalk := preload("res://dungeon/movement/grid_walkability.gd")
 const PartyMarkerArt := preload("res://dungeon/ui/party_marker_art.gd")
 const EncounterMapToken := preload("res://dungeon/ui/encounter_map_token.gd")
+const MapCellOverlayArt := preload("res://dungeon/ui/map_cell_overlay_art.gd")
 
 signal cell_clicked(cell: Vector2i)
 
@@ -23,6 +24,8 @@ const EXPLORER_VIEWPORT_CELLS_DESKTOP := Vector2i(16, 16)
 const EXPLORER_VIEWPORT_CELLS_MOBILE := Vector2i(6, 6)
 
 const GAMA_STYLE_MAX_ZOOM := 2.0
+## Explorer interactive map cell is 48×48 (`renderer.ex` `w-[48px] h-[48px]`); Dungeoneers atlas cells are 64×64.
+const EXPLORER_MAP_LABEL_CELL_PX := 48
 ## Allow strong zoom-out so a 16×64px-tall strip still fits very short windows (viewport mode).
 const VIEWPORT_ZOOM_CLAMP_MIN := 0.08
 const CAMERA_VIEW_MARGIN := 0.92
@@ -76,6 +79,9 @@ var _labels_root: Node2D
 var _cell_labels: Dictionary = {}  # Vector2i → Label
 var _encounter_tokens_root: Node2D = null
 var _encounter_token_by_cell: Dictionary = {}  # Vector2i → TextureRect
+## Phase 5: Explorer `map_template.ex` icons (treasure, features, waypoints, …) above terrain/doors.
+var _map_cell_overlays_root: Node2D = null
+var _map_overlay_host_by_cell: Dictionary = {}  # Vector2i → Control
 
 
 func set_guards_hostile(hostile: bool) -> void:
@@ -100,12 +106,14 @@ func apply_fog_clicked_cells_snapshot(cells: PackedVector2Array) -> void:
 	for i in range(cells.size()):
 		_fog_clicked_cells[Vector2i(int(cells[i].x), int(cells[i].y))] = true
 	_refresh_door_overlays()
+	_sync_map_cell_overlays()
 
 
 func apply_fog_clicked_cells_delta(cells: PackedVector2Array) -> void:
 	for i in range(cells.size()):
 		_fog_clicked_cells[Vector2i(int(cells[i].x), int(cells[i].y))] = true
 	_refresh_door_overlays()
+	_sync_map_cell_overlays()
 
 
 ## Disable hover highlight + cursor overrides while a modal (e.g. door `Window`) owns input (`dungeon_session.gd`).
@@ -208,6 +216,10 @@ func setup_from_grid(
 			_door_overlay.name = "DoorOverlays"
 			_door_overlay.z_index = 2
 			add_child(_door_overlay)
+			_map_cell_overlays_root = Node2D.new()
+			_map_cell_overlays_root.name = "MapCellOverlays"
+			_map_cell_overlays_root.z_index = 2
+			add_child(_map_cell_overlays_root)
 	else:
 		_build_tileset_legacy(terrain)
 
@@ -232,6 +244,7 @@ func setup_from_grid(
 	_refresh_door_overlays()
 	_ensure_encounter_tokens_root()
 	_sync_encounter_monster_tokens()
+	_sync_map_cell_overlays()
 
 
 func _ensure_encounter_tokens_root() -> void:
@@ -288,6 +301,65 @@ func _sync_encounter_monster_tokens() -> void:
 		enc_rect.modulate = Color(1.0, 1.0, 1.0, 0.92)
 		_encounter_tokens_root.add_child(enc_rect)
 		_encounter_token_by_cell[cell2] = enc_rect
+
+
+func _remove_map_overlay_host(cell: Vector2i) -> void:
+	var h: Control = _map_overlay_host_by_cell.get(cell) as Control
+	if h != null and is_instance_valid(h):
+		h.queue_free()
+	_map_overlay_host_by_cell.erase(cell)
+
+
+func _sync_map_cell_overlays() -> void:
+	if _map_cell_overlays_root == null or not _use_bundled_pngs:
+		return
+	var want: Dictionary = {}
+	for y in range(DungeonGrid.MAP_HEIGHT):
+		for x in range(DungeonGrid.MAP_WIDTH):
+			var cell := Vector2i(x, y)
+			var s: String = str(_logical_grid.get(cell, "wall"))
+			var is_revealed: bool = not _fog_enabled or bool(_revealed.get(cell, false))
+			if not is_revealed:
+				continue
+			var layers: Array = MapCellOverlayArt.overlay_layers_for_tile_at_cell(
+				s, cell, _cell_px, _fog_enabled, _fog_clicked_cells
+			)
+			if layers.is_empty():
+				continue
+			want[cell] = layers
+	for c in _map_overlay_host_by_cell.keys():
+		if not want.has(c):
+			_remove_map_overlay_host(c)
+	for cell2 in want.keys():
+		var lays: Array = want[cell2] as Array
+		var host: Control = _map_overlay_host_by_cell.get(cell2) as Control
+		if host == null or not is_instance_valid(host):
+			host = Control.new()
+			host.name = "Overlay_%d_%d" % [cell2.x, cell2.y]
+			host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			host.position = Vector2(float(cell2.x * _cell_px), float(cell2.y * _cell_px))
+			host.size = Vector2(float(_cell_px), float(_cell_px))
+			_map_cell_overlays_root.add_child(host)
+			_map_overlay_host_by_cell[cell2] = host
+		for ch in host.get_children():
+			ch.queue_free()
+		for i in range(lays.size()):
+			var d: Dictionary = lays[i] as Dictionary
+			var tex: Texture2D = d.get("texture") as Texture2D
+			if tex == null:
+				continue
+			var px: Vector2 = d.get("px", Vector2.ZERO) as Vector2
+			var sz: Vector2 = d.get("size", Vector2.ONE) as Vector2
+			var zi: int = int(d.get("z", 0))
+			var tex_rect := TextureRect.new()
+			tex_rect.texture = tex
+			tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			tex_rect.position = px
+			tex_rect.size = sz
+			tex_rect.z_index = zi
+			host.add_child(tex_rect)
 
 
 func _apply_generation_layer_modulate() -> void:
@@ -517,12 +589,14 @@ func apply_logical_tile_change(cell: Vector2i, s: String) -> void:
 		return
 	if _fog_enabled and not _revealed.get(cell, false):
 		_sync_encounter_monster_tokens()
+		_sync_map_cell_overlays()
 		return
 	_paint_cell(cell, s)
 	_refresh_door_overlays()
 	# If a tile patch removes a labelled cell (e.g. room_trap → floor), hide the label.
 	_refresh_label_visibility(cell, true)
 	_sync_encounter_monster_tokens()
+	_sync_map_cell_overlays()
 
 
 func _paint_cell(cell: Vector2i, s: String) -> void:
@@ -584,6 +658,7 @@ func _refresh_all_cells() -> void:
 			_refresh_label_visibility(cell, is_revealed)
 	_refresh_door_overlays()
 	_sync_encounter_monster_tokens()
+	_sync_map_cell_overlays()
 
 
 func set_path_preview(path: PackedVector2Array) -> void:
@@ -716,12 +791,33 @@ func sync_peer_marker(
 		tw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tw.tween_property(r, "position", target_pos, 0.12)
 		tw.parallel().tween_property(r, "size", target_size, 0.12)
+		if r is TextureRect:
+			var tr_move := r as TextureRect
+			var disp := PartyMarkerArt.make_walk_display_texture(role, facing)
+			if disp != null:
+				tr_move.texture = disp
 		tw.finished.connect(
-			func() -> void: _update_peer_marker_name_label(r, display_label, r.size)
+			func() -> void:
+				if is_instance_valid(r) and r is TextureRect:
+					var tr_done := r as TextureRect
+					var fr_done := int(
+						tr_done.get_meta("marker_facing", PartyMarkerArt.FACING_DOWN)
+					)
+					var rl_done := str(tr_done.get_meta("marker_role", role))
+					var st_done := PartyMarkerArt.texture_for_role_facing(rl_done, fr_done)
+					if st_done == null:
+						st_done = PartyMarkerArt.texture_for_role(rl_done)
+					if st_done != null:
+						tr_done.texture = st_done
+				_update_peer_marker_name_label(r, display_label, r.size)
 		)
 	else:
 		r.position = target_pos
 		r.size = target_size
+		if r is TextureRect and want_tex:
+			var tr_snap := r as TextureRect
+			if tex != null:
+				tr_snap.texture = tex
 	_update_peer_marker_name_label(r, display_label, target_size)
 
 	if _follow_local_camera and peer_id == _local_peer_id and _camera_for_fit != null:
@@ -836,9 +932,9 @@ static func _label_text_for_tile(s: String) -> String:
 			return parts[1]
 		return "S"
 	if s == "stair_up":
-		return "U"
+		return "↑"
 	if s == "stair_down":
-		return "D"
+		return "↓"
 	if s.begins_with("room_label"):
 		var parts := s.split("|")
 		if parts.size() >= 2:
@@ -859,20 +955,74 @@ static func _label_text_for_tile(s: String) -> String:
 		if parts_b.size() >= 2 and not parts_b[1].is_empty():
 			return parts_b[1]
 		return "B"
+	## Explorer shows feature **art** only on the cell; hide id badges (Phase 5 map parity).
 	if s.begins_with("special_feature"):
-		var parts := s.split("|")
-		# `special_feature|F1|Pillar` — use the feature id (F1, W1, …)
-		if parts.size() >= 2:
-			return parts[1]
-		return "F"
+		return ""
 	return ""
+
+
+static func _scaled_map_label_px(cell_px: int, explorer_text_px: int) -> int:
+	return maxi(
+		8, int(round(float(explorer_text_px) * float(cell_px) / float(EXPLORER_MAP_LABEL_CELL_PX)))
+	)
+
+
+static func _apply_cell_label_visual(lbl: Label, tile_str: String, cell_px: int) -> void:
+	var s := tile_str.strip_edges()
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	## Tailwind `text-green-600` on stair / waypoint markers (`map_template.ex`).
+	var green600 := Color8(0x16, 0xA3, 0x4A)
+	if (
+		s.begins_with("room_label")
+		or s.begins_with("corridor_label")
+		or s.begins_with("area_label")
+		or s.begins_with("building_label")
+	):
+		var fs_room := _scaled_map_label_px(cell_px, 14)
+		lbl.add_theme_font_size_override("font_size", fs_room)
+		lbl.add_theme_color_override("font_color", Color.WHITE)
+		lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.0))
+		lbl.add_theme_constant_override("shadow_offset_x", 0)
+		lbl.add_theme_constant_override("shadow_offset_y", 0)
+		lbl.add_theme_constant_override("outline_size", 0)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0, 0, 0, 0.62)
+		sb.set_corner_radius_all(5)
+		var pad := maxi(2, int(round(float(cell_px) * 0.06)))
+		sb.set_content_margin_all(pad)
+		lbl.add_theme_stylebox_override("normal", sb)
+		return
+	if (
+		s.begins_with("starting_stair")
+		or s == "stair_up"
+		or s == "stair_down"
+		or s.begins_with("starting_waypoint")
+		or s.begins_with("waypoint")
+	):
+		var fs_green := _scaled_map_label_px(cell_px, 20)
+		lbl.add_theme_font_size_override("font_size", fs_green)
+		lbl.add_theme_color_override("font_color", green600)
+		lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.0))
+		lbl.add_theme_constant_override("shadow_offset_x", 0)
+		lbl.add_theme_constant_override("shadow_offset_y", 0)
+		var out_w := maxi(1, int(round(float(cell_px) * 0.05)))
+		lbl.add_theme_constant_override("outline_size", out_w)
+		lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.45))
+		return
+	var fs_def := _scaled_map_label_px(cell_px, 14)
+	lbl.add_theme_font_size_override("font_size", fs_def)
+	lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+	lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
+	lbl.add_theme_constant_override("shadow_offset_x", 1)
+	lbl.add_theme_constant_override("shadow_offset_y", 1)
+	lbl.add_theme_constant_override("outline_size", 0)
 
 
 func _build_cell_labels(grid: Dictionary) -> void:
 	if _labels_root == null:
 		return
 	_cell_labels.clear()
-	var font_size := maxi(8, int(_cell_px * 0.28))
 	for y in DungeonGrid.MAP_HEIGHT:
 		for x in DungeonGrid.MAP_WIDTH:
 			var cell := Vector2i(x, y)
@@ -882,13 +1032,7 @@ func _build_cell_labels(grid: Dictionary) -> void:
 				continue
 			var lbl := Label.new()
 			lbl.text = text
-			lbl.add_theme_font_size_override("font_size", font_size)
-			lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
-			lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
-			lbl.add_theme_constant_override("shadow_offset_x", 1)
-			lbl.add_theme_constant_override("shadow_offset_y", 1)
-			lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			_apply_cell_label_visual(lbl, s, _cell_px)
 			lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			lbl.position = Vector2(float(cell.x * _cell_px), float(cell.y * _cell_px))
 			lbl.size = Vector2(float(_cell_px), float(_cell_px))

@@ -895,6 +895,7 @@ static func add_city_linking_waypoints(
 	_place_waypoints(grid, shuffled, mini(2, shuffled.size()), rng)
 
 
+## Explorer `Enum.random(features)` on theme indoor/outdoor feature lists (no global registry).
 static func pick_city_feature_name(
 	theme: Dictionary, indoor: bool, rng: RandomNumberGenerator
 ) -> String:
@@ -904,9 +905,29 @@ static func pick_city_feature_name(
 	else:
 		arr = theme.get("outdoor_features", []) as Array
 	if arr.is_empty():
-		return pick_special_feature_name(theme, rng)
-	var tier := _determine_special_feature_rarity_roll(rng)
-	return pick_weighted_name_from_theme_list(arr, rng, tier)
+		return ""
+	var entry: Variant = arr[rng.randi_range(0, arr.size() - 1)]
+	if entry is Dictionary:
+		return str((entry as Dictionary).get("name", "")).strip_edges()
+	if entry is String:
+		return str(entry).strip_edges()
+	return ""
+
+
+## Explorer `get_monster_for_city_block/3` — swap `monsters` with indoor/outdoor list for fog/CR picks.
+static func pick_monster_for_city_encounter(
+	theme: Dictionary, indoor: bool, rng: RandomNumberGenerator, max_level: int
+) -> String:
+	var mlist: Array
+	if indoor:
+		mlist = theme.get("indoor_monsters", []) as Array
+	else:
+		mlist = theme.get("outdoor_monsters", []) as Array
+	if mlist.is_empty():
+		return pick_monster(theme, rng, max_level, max_level)
+	var theme_city: Dictionary = theme.duplicate()
+	theme_city["monsters"] = mlist.duplicate()
+	return pick_monster_for_theme_with_fog_type(theme_city, rng, max_level, max_level)
 
 
 static func add_city_special_features(
@@ -918,10 +939,16 @@ static func add_city_special_features(
 		var b: Dictionary = block
 		var typ := str(b.get("type", ""))
 		if typ == "building":
+			var indoor_f: Array = theme.get("indoor_features", []) as Array
+			if indoor_f.is_empty():
+				continue
 			if rng.randf() >= 0.3:
 				continue
 			_place_city_feature_cell(grid, b, true, theme, rng)
 		elif typ == "road_intersection":
+			var outdoor_f: Array = theme.get("outdoor_features", []) as Array
+			if outdoor_f.is_empty():
+				continue
 			if rng.randf() >= 0.4:
 				continue
 			_place_city_feature_cell(grid, b, false, theme, rng)
@@ -947,6 +974,8 @@ static func _place_city_feature_cell(
 		return
 	var pos := pool[rng.randi_range(0, pool.size() - 1)]
 	var nm := pick_city_feature_name(theme, indoor, rng)
+	if nm.is_empty():
+		return
 	grid[pos] = "special_feature|%s|%s" % [nm, nm]
 
 
@@ -969,16 +998,7 @@ static func add_encounters_to_city_areas(
 			continue
 		counter += 1
 		var indoor := str(block.get("type", "")) == "building"
-		var mlist: Array
-		if indoor:
-			mlist = theme.get("indoor_monsters", []) as Array
-		else:
-			mlist = theme.get("outdoor_monsters", []) as Array
-		var mname: String
-		if mlist.is_empty():
-			mname = pick_monster(theme, rng, max_level, max_level)
-		else:
-			mname = pick_weighted_name_from_theme_list(mlist, rng, _rarity_tier(rng))
+		var mname := pick_monster_for_city_encounter(theme, indoor, rng, max_level)
 		grid[p] = "encounter|E%d|%s" % [counter, mname]
 
 

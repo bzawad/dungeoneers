@@ -2,19 +2,52 @@ extends Node
 
 ## Client-only Explorer `priv/static/audio/*.mp3` playback (Phase 7.5). Safe no-ops when files are absent.
 ##
-## AUD-05 / AUD-02 — Explorer `push_event("play_audio", %{sound: …})` sources (repo `dungeon_explorer/` parity checklist):
-## - `lib/dungeon_web/live/dungeon_live.ex`: stairs, pickup, fight, coins, click, chest_open, orch_hit; revival / rumor / quest accept paths.
-## - `lib/dungeon_web/live/dungeon_live/combat_system.ex`: death, coins (victory), dynamic round `sound` → `combat_sfx_basename_for_sound_id`, orch_hit (level-up path).
-## - `lib/dungeon_web/live/dungeon_live/door_system.ex`: click, door_open, banging.
-## - `lib/dungeon_web/live/dungeon_live/movement.ex`: chest_open.
-## - `lib/dungeon_web/live/dungeon_live/trap_system.ex`: monster_hit.
-## - `lib/dungeon_web/live/dungeon_live/treasure_system.ex`: coins (dismiss treasure).
-## - `lib/dungeon_web/live/dungeon_live/food_system.ex`, `healing_potion_system.ex`: pickup.
-## - `lib/dungeon_web/live/dungeon_live/wandering_monster_system.ex`: fight (same sting as encounter Fight).
-## - `lib/dungeon_web/live/dungeon_live/quest_item_system.ex`: orch_hit.
+## Phase 9 / AUD-02 / AUD-05 — `play_audio` parity and drift control (audit **2026-04-19**).
+## Re-audit Explorer when sounds change: `rg 'push_event\\(.*\"play_audio\"' dungeon_explorer/lib`
+## — then sync EXPLORER_PLAY_AUDIO_SOUND_IDS and combat_sfx_basename_for_sound_id if needed.
+##
+## Web client map: `dungeon_explorer/assets/js/app.js` — `Hooks.AudioPlayer.soundEffects` keys consumed via
+## `handleEvent("play_audio", …)` → `playSound(soundName)`. Background music uses separate LiveView events
+## (`play_background_music`, `play_combat_music`, …), not `play_audio`.
+## Explorer may log `Sound not found` or skip playback before user gesture; Godot skips SFX when headless or
+## _is_display_client is false (no dedicated footstep in web — see play_move_step / wood_click.mp3).
+##
+## Explorer `sound` → Explorer module(s) → Dungeoneers (dungeon_session.gd wires these ExplorerAudio methods):
+## - **banging** — door_system.ex → play_banging()
+## - **chest_open** — movement.ex, dungeon_live.ex → play_chest_open()
+## - **click** — door_system.ex, dungeon_live.ex → play_click()
+## - **coins** — combat_system.ex, treasure_system.ex, dungeon_live.ex → play_coins()
+## - **death** — combat_system.ex → play_death_sting()
+## - **door_open** — door_system.ex → play_door_open()
+## - **fight** — dungeon_live.ex, wandering_monster_system.ex, combat → play_combat_sfx("fight", …)
+## - **monster_hit** — trap_system.ex, combat_system.ex → play_combat_sfx("monster_hit", …) (orc → orch_hit.mp3)
+## - **monster_miss** — combat_system.ex → play_combat_sfx("monster_miss", …)
+## - **orch_hit** — dungeon_live.ex, combat_system.ex level-up, quest_item_system.ex → play_quest_completion_fanfare / play_level_up_hit
+## - **pickup** — dungeon_live.ex, food_system.ex, healing_potion_system.ex → play_pickup()
+## - **player_hit** / **player_miss** — combat_system.ex → play_combat_sfx(...)
+## - **stairs** — dungeon_live.ex → play_stairs()
 
 const AUDIO_DIR := "res://assets/explorer/audio/"
 const USER_AUDIO_CFG := "user://explorer_audio_settings.cfg"
+
+## Canonical `%{sound: …}` literals from Explorer `push_event("play_audio", …)` plus combat-only dynamic IDs.
+## Keep sorted; update after Explorer grep when new cues ship (CI asserts assets + combat mapping).
+const EXPLORER_PLAY_AUDIO_SOUND_IDS: Array[String] = [
+	"banging",
+	"chest_open",
+	"click",
+	"coins",
+	"death",
+	"door_open",
+	"fight",
+	"monster_hit",
+	"monster_miss",
+	"orch_hit",
+	"pickup",
+	"player_hit",
+	"player_miss",
+	"stairs",
+]
 
 var _sfx_bus := "Master"
 var _music_bus := "Master"
