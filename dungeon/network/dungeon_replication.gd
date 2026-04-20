@@ -598,31 +598,23 @@ func begin_solo_local_session(join_role: String, solo_display_name: String = "")
 	var theme_norm := _authority_theme
 	if theme_norm != "up" and theme_norm != "down":
 		theme_norm = "up"
-	var rng := RandomNumberGenerator.new()
-	rng.seed = _authority_seed
-	var result: Dictionary = TraditionalGen.generate(rng, theme_norm)
-	var grid: Dictionary = result["grid"]
-	var local_checksum := TraditionalGen.grid_checksum(grid)
-	if local_checksum != _authority_checksum:
-		var msg := (
-			"solo grid_checksum mismatch: local="
-			+ str(local_checksum)
-			+ " expected="
-			+ str(_authority_checksum)
-		)
-		push_error("[Dungeoneers] " + msg)
-		_solo_offline_peer = -1
-		_player_positions.clear()
-		_revealed_by_peer.clear()
-		_peer_roles.erase(SOLO_LOCAL_PEER_ID)
-		authority_dungeon_failed.emit(msg)
-		return
-
-	var cr_from: Variant = result.get("corridors", [])
-	if cr_from is Array:
-		_authority_corridors = (cr_from as Array).duplicate()
-	else:
-		_authority_corridors.clear()
+	# IMPORTANT: In solo-local mode, the authority grid is already in memory.
+	# Do not attempt to re-generate the grid from seed/theme_name; RNG consumption differs
+	# (random theme selection advances RNG before generation), which can cause checksum mismatch.
+	var grid: Dictionary = _authority_grid
+	var theme_d: Dictionary = {}
+	if not _authority_theme_name.strip_edges().is_empty():
+		DungeonThemes.load_themes()
+		theme_d = DungeonThemes.find_theme_by_name(_authority_theme_name.strip_edges())
+		if theme_d.is_empty():
+			var msg0 := "solo unknown theme_name: " + _authority_theme_name
+			push_error("[Dungeoneers] " + msg0)
+			_solo_offline_peer = -1
+			_player_positions.clear()
+			_revealed_by_peer.clear()
+			_peer_roles.erase(SOLO_LOCAL_PEER_ID)
+			authority_dungeon_failed.emit(msg0)
+			return
 
 	if _fog_enabled:
 		_seed_initial_fog_for_peer(_solo_offline_peer, spawn)
@@ -642,16 +634,16 @@ func begin_solo_local_session(join_role: String, solo_display_name: String = "")
 		"fog_radius": fr,
 		"fog_type": ft,
 		"torch_reveals_moves": _torch_reveals_moves,
-		"floor_theme": str(result.get("floor_theme", "")),
-		"wall_theme": str(result.get("wall_theme", "")),
+		"floor_theme": str(theme_d.get("floor_theme", "")),
+		"wall_theme": str(theme_d.get("wall_theme", "")),
 		"theme_name": _authority_theme_name,
 		"dungeon_level": _dungeon_level,
 		"authority_player_level": _player_level,
-		"generation_type": str(result.get("generation_type", "dungeon")),
-		"rooms": result.get("rooms", []),
-		"corridors": result.get("corridors", []),
-		"road_theme": str(result.get("road_theme", "")),
-		"shrub_theme": str(result.get("shrub_theme", "")),
+		"generation_type": str(theme_d.get("generation_type", _generation_type)),
+		"rooms": _authority_rooms.duplicate() if _authority_rooms is Array else [],
+		"corridors": _authority_corridors.duplicate() if _authority_corridors is Array else [],
+		"road_theme": str(theme_d.get("road_theme", "")),
+		"shrub_theme": str(theme_d.get("shrub_theme", "")),
 		"display_name": _solo_cached_display_name,
 		"peer_display_names": {_solo_offline_peer: _solo_cached_display_name},
 		"listen_port": 0,

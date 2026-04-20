@@ -270,7 +270,11 @@ func start_local(authority_seed: int, theme_direction: String) -> void:
 	view.set_view_center_from_cell(DungeonGridView.find_starting_cell_for_camera(result["grid"]))
 	_welcome_fog_type = str(result.get("fog_type", "dim"))
 	view.configure_fog(false, {}, _welcome_fog_type)
-	_hud_theme_title = "Ancient Castle" if theme == "up" else "Dark Caverns"
+	var tn := str(result.get("theme", "")).strip_edges()
+	if not tn.is_empty():
+		_hud_theme_title = tn
+	else:
+		_hud_theme_title = "Ancient Castle" if theme == "up" else "Dark Caverns"
 	_hud_dungeon_level = 1
 	var st0: Dictionary = PlayerCombatStats.for_role("rogue")
 	_last_armor_class = int(st0.get("armor_class", 12))

@@ -266,7 +266,10 @@ func _start_local_dungeon(
 		var ddir := str(theme_data.get("direction", "up")).strip_edges()
 		theme_norm = ddir if (ddir == "up" or ddir == "down") else "up"
 	else:
-		authority = TraditionalGen.generate(s_rng, theme_norm)
+		# Explorer parity: new game starts from a random theme, not legacy up/down.
+		authority = DungeonGenerator.generate_with_player_level(s_rng, 1, 1)
+		var theme_dir_raw := str(authority.get("theme_direction", "up")).strip_edges()
+		theme_norm = theme_dir_raw if (theme_dir_raw == "up" or theme_dir_raw == "down") else "up"
 	var checksum := TraditionalGen.grid_checksum(authority["grid"])
 	var gen_meta := {
 		"theme_name": str(authority.get("theme", "")),

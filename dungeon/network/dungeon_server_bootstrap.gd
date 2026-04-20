@@ -4,6 +4,7 @@ class_name DungeonServerBootstrap
 ## Shared authority dungeon + ENet listen setup for [code]Main.gd --server[/code] and [code]DedicatedServer[/code].
 
 const TraditionalGen := preload("res://dungeon/generator/traditional_generator.gd")
+const DungeonGenerator := preload("res://dungeon/generator/dungeon_generator.gd")
 const DungeonReplication := preload("res://dungeon/network/dungeon_replication.gd")
 const DungeonNetworkHost := preload("res://dungeon/network/dungeon_network_host.gd")
 const DungeonFog := preload("res://dungeon/fog/fog_of_war.gd")
@@ -29,7 +30,7 @@ static func args_has(args: PackedStringArray, needle: String) -> bool:
 static func start_stub_server_on(
 	parent: Node,
 	dungeon_seed: int,
-	dungeon_theme: String,
+	_dungeon_theme: String,
 	listen_port: int,
 	welcome_role_echo: String,
 	fog_enabled: bool,
@@ -39,18 +40,19 @@ static func start_stub_server_on(
 	smoke_torch_expire_probe: bool,
 	max_clients: int = 8
 ) -> Dictionary:
-	var theme := dungeon_theme
-	if theme != "up" and theme != "down":
-		theme = "up"
-
 	var s_rng := RandomNumberGenerator.new()
 	var chosen_seed := dungeon_seed
 	if chosen_seed < 0:
 		chosen_seed = randi()
 	s_rng.seed = chosen_seed
 
-	var authority: Dictionary = TraditionalGen.generate(s_rng, theme)
+	# Explorer parity: new game starts from a random theme, not legacy up/down.
+	var authority: Dictionary = DungeonGenerator.generate_with_player_level(s_rng, 1, 1)
 	var checksum := TraditionalGen.grid_checksum(authority["grid"])
+	var theme_dir_raw := str(authority.get("theme_direction", "up")).strip_edges()
+	var theme_dir_norm := (
+		theme_dir_raw if (theme_dir_raw == "up" or theme_dir_raw == "down") else "up"
+	)
 	var gen_meta_srv := {
 		"theme_name": str(authority.get("theme", "")),
 		"dungeon_level": 1,
@@ -74,7 +76,9 @@ static func start_stub_server_on(
 		"[Dungeoneers] Server authority dungeon seed=",
 		chosen_seed,
 		" theme=",
-		theme,
+		theme_dir_norm,
+		" theme_name=",
+		str(authority.get("theme", "")),
 		" checksum=",
 		checksum,
 		" fog_enabled=",
@@ -92,7 +96,7 @@ static func start_stub_server_on(
 	parent.add_child(rep)
 	rep.configure_authority(
 		chosen_seed,
-		theme,
+		theme_dir_norm,
 		checksum,
 		welcome_role_echo,
 		authority["grid"],
@@ -123,7 +127,7 @@ static func start_stub_server_on(
 			"replication": null,
 			"net_host": null,
 			"chosen_seed": chosen_seed,
-			"theme": theme,
+			"theme": theme_dir_norm,
 			"checksum": checksum,
 			"listen_port": listen_port,
 			"fog_enabled": fog_enabled,
@@ -141,7 +145,7 @@ static func start_stub_server_on(
 		"replication": rep,
 		"net_host": net_host,
 		"chosen_seed": chosen_seed,
-		"theme": theme,
+		"theme": theme_dir_norm,
 		"checksum": checksum,
 		"listen_port": listen_port,
 		"fog_enabled": fog_enabled,
