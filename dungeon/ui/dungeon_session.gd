@@ -1385,13 +1385,11 @@ func _combat_event_panel_bg(line: String, monster_disp: String) -> Color:
 	return Color8(0x1F, 0x29, 0x37)
 
 
-func _refresh_combat_event_strip(snapshot: Dictionary, for_finished: bool) -> void:
+func _refresh_combat_event_strip(snapshot: Dictionary) -> void:
 	if _combat_events_vbox == null:
 		return
 	for c in _combat_events_vbox.get_children():
 		c.queue_free()
-	if for_finished:
-		return
 	var lines: Array = []
 	var arr: Variant = snapshot.get("log_recent_four", [])
 	if arr is Array:
@@ -1433,12 +1431,10 @@ func _combat_monster_texture_from_snapshot(snapshot: Dictionary) -> Texture2D:
 	return load(path) as Texture2D
 
 
-func _update_combat_vs_from_snapshot(snapshot: Dictionary, for_finished: bool) -> void:
+func _update_combat_vs_from_snapshot(snapshot: Dictionary) -> void:
 	if _combat_vs_container == null:
 		return
-	_combat_vs_container.visible = not for_finished
-	if for_finished:
-		return
+	_combat_vs_container.visible = true
 	var p_tex := _combat_player_texture_for_session()
 	if _combat_player_tex != null:
 		_combat_player_tex.texture = p_tex
@@ -1737,14 +1733,18 @@ func _on_combat_state_changed(snapshot: Dictionary) -> void:
 	if bool(snapshot.get("finished", false)):
 		_play_combat_sfx_from_snapshot(snapshot)
 		_ensure_combat_window()
+		## Explorer `CombatSystem.get_combat_content` — combat modal stays the same (recent events + VS) until
+		## `:show_death_dialog` / `:show_victory_dialog`; do not swap to full log (avoids a flashing “other” layout).
 		if _combat_title_label != null:
-			_combat_title_label.text = str(snapshot.get("outcome_title", "Combat"))
+			_combat_title_label.text = str(
+				snapshot.get("title", str(snapshot.get("outcome_title", "Combat")))
+			)
 		if _combat_surprise_label != null:
 			_combat_surprise_label.visible = false
-		_refresh_combat_event_strip(snapshot, true)
+		_refresh_combat_event_strip(snapshot)
 		if _combat_log_label != null:
-			_combat_log_label.visible = true
-			_combat_log_label.text = str(snapshot.get("outcome_body", snapshot.get("log_full", "")))
+			_combat_log_label.visible = false
+			_combat_log_label.text = ""
 		if _combat_attack_btn != null:
 			_combat_attack_btn.disabled = true
 		if _combat_flee_btn != null:
@@ -1752,7 +1752,7 @@ func _on_combat_state_changed(snapshot: Dictionary) -> void:
 		if _combat_btn_row != null:
 			_combat_btn_row.visible = true
 		_combat_finish_flee_success = bool(snapshot.get("flee_success", false))
-		_update_combat_vs_from_snapshot(snapshot, true)
+		_update_combat_vs_from_snapshot(snapshot)
 		if _combat_window != null:
 			_combat_window.title = "Combat!"
 			_apply_combat_window_chrome()
@@ -1786,8 +1786,8 @@ func _on_combat_state_changed(snapshot: Dictionary) -> void:
 	if _combat_log_label != null:
 		_combat_log_label.visible = false
 		_combat_log_label.text = ""
-	_refresh_combat_event_strip(snapshot, false)
-	_update_combat_vs_from_snapshot(snapshot, false)
+	_refresh_combat_event_strip(snapshot)
+	_update_combat_vs_from_snapshot(snapshot)
 	if _combat_attack_btn != null:
 		var surp: bool = bool(snapshot.get("surprise_attack", false))
 		_combat_attack_btn.text = "Backstab" if surp else "Attack"
@@ -3115,11 +3115,12 @@ func _ensure_rumors_list_window() -> void:
 
 	_rumors_item_list = ItemList.new()
 	_rumors_item_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_rumors_item_list.custom_minimum_size = Vector2(0, ExplorerModalChrome.SCROLL_BODY_MAX_PX)
+	# Explorer uses `max-h-64` (max), not a fixed minimum; keep room for footer buttons in 360px windows.
+	_rumors_item_list.custom_minimum_size = Vector2(0, 220)
 	_rumors_item_list.allow_reselect = true
 	_rumors_item_list.select_mode = ItemList.SELECT_SINGLE
 	_rumors_item_list.item_activated.connect(_on_rumor_item_activated)
-	vb.add_child(_rumors_item_list)
+	vb.add_child(ExplorerModalChrome.wrap_item_list_in_plated_panel(_rumors_item_list))
 
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -3143,8 +3144,6 @@ func _apply_rumors_list_window_chrome() -> void:
 	ExplorerModalChrome.style_window_panel(_rumors_list_window, "gray")
 	if _rumors_list_hint != null:
 		ExplorerModalChrome.style_body_label(_rumors_list_hint, "gray")
-	if _rumors_item_list != null:
-		ExplorerModalChrome.style_item_list_for_explorer_list(_rumors_item_list)
 	if _rumors_view_btn != null:
 		ExplorerModalChrome.style_button(_rumors_view_btn, "primary", false)
 	if _rumors_close_btn != null:
@@ -3256,13 +3255,11 @@ func _ensure_special_items_list_window() -> void:
 
 	_special_items_item_list = ItemList.new()
 	_special_items_item_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_special_items_item_list.custom_minimum_size = Vector2(
-		0, ExplorerModalChrome.SCROLL_BODY_MAX_PX
-	)
+	_special_items_item_list.custom_minimum_size = Vector2(0, 220)
 	_special_items_item_list.allow_reselect = true
 	_special_items_item_list.select_mode = ItemList.SELECT_SINGLE
 	_special_items_item_list.item_activated.connect(_on_special_item_item_activated)
-	vb_si.add_child(_special_items_item_list)
+	vb_si.add_child(ExplorerModalChrome.wrap_item_list_in_plated_panel(_special_items_item_list))
 
 	var row_si := HBoxContainer.new()
 	row_si.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -3286,8 +3283,6 @@ func _apply_special_items_list_window_chrome() -> void:
 	ExplorerModalChrome.style_window_panel(_special_items_list_window, "gray")
 	if _special_items_list_hint != null:
 		ExplorerModalChrome.style_body_label(_special_items_list_hint, "gray")
-	if _special_items_item_list != null:
-		ExplorerModalChrome.style_item_list_for_explorer_list(_special_items_item_list)
 	if _special_items_view_btn != null:
 		ExplorerModalChrome.style_button(_special_items_view_btn, "primary", false)
 	if _special_items_close_btn != null:
@@ -3417,11 +3412,12 @@ func _ensure_achievements_list_window() -> void:
 
 	_achievements_item_list = ItemList.new()
 	_achievements_item_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_achievements_item_list.custom_minimum_size = Vector2(0, ExplorerModalChrome.SCROLL_BODY_MAX_PX)
+	# Explorer uses `max-h-64` (max), not a fixed minimum; keep room for footer buttons in 360px windows.
+	_achievements_item_list.custom_minimum_size = Vector2(0, 220)
 	_achievements_item_list.allow_reselect = true
 	_achievements_item_list.select_mode = ItemList.SELECT_SINGLE
 	_achievements_item_list.item_activated.connect(_on_achievement_item_activated)
-	vb_ac.add_child(_achievements_item_list)
+	vb_ac.add_child(ExplorerModalChrome.wrap_item_list_in_plated_panel(_achievements_item_list))
 
 	var row_ac := HBoxContainer.new()
 	row_ac.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -3445,8 +3441,6 @@ func _apply_achievements_list_window_chrome() -> void:
 	ExplorerModalChrome.style_window_panel(_achievements_list_window, "gray")
 	if _achievements_list_hint != null:
 		ExplorerModalChrome.style_body_label(_achievements_list_hint, "gray")
-	if _achievements_item_list != null:
-		ExplorerModalChrome.style_item_list_for_explorer_list(_achievements_item_list)
 	if _achievements_view_btn != null:
 		ExplorerModalChrome.style_button(_achievements_view_btn, "primary", false)
 	if _achievements_close_btn != null:

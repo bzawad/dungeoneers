@@ -195,17 +195,33 @@ static func tighten_button_for_modal_icon_row(btn: Button) -> void:
 			btn.add_theme_stylebox_override(sn, sb)
 
 
-static func style_item_list_for_explorer_list(il: ItemList) -> void:
+## Outer plate + list fill so the scroll body matches Explorer list dialogs (`bg-gray-800` frame).
+static func wrap_item_list_in_plated_panel(il: ItemList) -> PanelContainer:
 	if il == null:
-		return
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color8(0x1F, 0x29, 0x37)
-	sb.border_color = Color8(0x4B, 0x55, 0x63)
-	sb.set_border_width_all(1)
-	sb.set_corner_radius_all(6)
-	il.add_theme_stylebox_override(&"panel", sb)
+		return null
+	var pc := PanelContainer.new()
+	pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var outer := StyleBoxFlat.new()
+	outer.bg_color = Color8(0x1F, 0x29, 0x37)
+	outer.border_color = Color8(0x4B, 0x55, 0x63)
+	outer.set_border_width_all(1)
+	outer.set_corner_radius_all(6)
+	# Do NOT add vertical padding here: the calling windows already give the list a fixed
+	# `SCROLL_BODY_MAX_PX` minimum height, and extra margins would push footer buttons out.
+	outer.set_content_margin_all(0)
+	pc.add_theme_stylebox_override(&"panel", outer)
+	il.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	il.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var inner := StyleBoxFlat.new()
+	inner.bg_color = Color8(0x1F, 0x29, 0x37)
+	inner.set_border_width_all(0)
+	inner.set_corner_radius_all(4)
+	il.add_theme_stylebox_override(&"panel", inner)
 	il.add_theme_color_override(&"font_color", Color8(0xE5, 0xE7, 0xEB))
 	il.add_theme_color_override(&"guide_color", Color8(0x4B, 0x55, 0x63))
+	pc.add_child(il)
+	return pc
 
 
 static func scheme_for_encounter_resolution_title(title: String) -> String:

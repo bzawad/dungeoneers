@@ -377,9 +377,14 @@ class InteractiveCombatSession:
 	var _tile_rep: String = ""
 	var _safety_rounds: int = 0
 	var _flee_success: bool = false
+	## Explorer `CombatSystem` — `process_monster_turn` is scheduled ~1s after the player exchange; resolver stays paused until `advance_monster_turn()`.
+	var _monster_turn_pending: bool = false
 
 	func _init() -> void:
 		pass
+
+	func monster_turn_pending() -> bool:
+		return _monster_turn_pending and not finished
 
 	func _append(line: String) -> void:
 		log_lines.append(line)
@@ -457,6 +462,7 @@ class InteractiveCombatSession:
 			"flee_success": _flee_success,
 			"surprise_attack": surprise_attack_available and awaiting_surprise_action,
 			"sfx_events": sfx_arr,
+			"monster_strike_pending": _monster_turn_pending and not finished,
 		}
 
 	func _setup_monster(monster_name: String) -> void:
@@ -488,6 +494,7 @@ class InteractiveCombatSession:
 		finished = false
 		victory = false
 		_flee_success = false
+		_monster_turn_pending = false
 		_treasure_gold = 0
 		_xp_gain = 0
 		_tile_rep = ""
@@ -555,7 +562,7 @@ class InteractiveCombatSession:
 		current_turn = "player" if player_first else "monster"
 		awaiting_player = current_turn == "player"
 		if current_turn == "monster":
-			_monster_attack_turn()
+			_monster_turn_pending = true
 
 	func _finish_victory_session() -> void:
 		finished = true
@@ -735,7 +742,7 @@ class InteractiveCombatSession:
 			return
 		current_turn = "monster"
 		awaiting_player = false
-		_monster_attack_turn()
+		_monster_turn_pending = true
 
 	func _surprise_backstab_then_transition() -> void:
 		var rng_bs1 := stream.next_rng()
@@ -821,7 +828,7 @@ class InteractiveCombatSession:
 		current_turn = "player" if player_first else "monster"
 		awaiting_player = current_turn == "player"
 		if current_turn == "monster":
-			_monster_attack_turn()
+			_monster_turn_pending = true
 
 	func advance_player_attack() -> Dictionary:
 		_sfx_events.clear()
@@ -837,6 +844,15 @@ class InteractiveCombatSession:
 			return _snapshot()
 		if player_has_acted and monster_has_acted:
 			_maybe_advance_round()
+		return _snapshot()
+
+	## Runs the deferred monster strike (Explorer delayed `:process_monster_turn`). Clears `monster_strike_pending`.
+	func advance_monster_turn() -> Dictionary:
+		_sfx_events.clear()
+		if finished or not _monster_turn_pending:
+			return _snapshot()
+		_monster_turn_pending = false
+		_monster_attack_turn()
 		return _snapshot()
 
 	## Explorer `CombatSystem.flee_combat` + `process_flee_evade` (free hit then DC 12 d20+DEX).
@@ -932,5 +948,8 @@ static func play_interactive_to_end(
 		guard += 1
 		if guard > 2000:
 			break
-		s.advance_player_attack()
+		if s.monster_turn_pending():
+			s.advance_monster_turn()
+		else:
+			s.advance_player_attack()
 	return s.build_finish_outcome()

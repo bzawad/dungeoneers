@@ -16,6 +16,7 @@ const _CARD_BG := Color8(0x37, 0x41, 0x55)
 const _CARD_BORDER := Color8(0x4b, 0x55, 0x66)
 const _PANEL_BG := Color8(0x1e, 0x29, 0x3b)
 const _PANEL_BORDER := Color8(0x30, 0x41, 0x5c)
+const _TILE_MIN_HEIGHT_PX := 46.0
 
 var _texture_cb: Callable = Callable()
 
@@ -52,6 +53,9 @@ var _align_bar: ProgressBar
 var _btn_rumors: Button
 var _btn_spec: Button
 var _btn_ach: Button
+var _wrap_spec: PanelContainer
+var _wrap_rumors: PanelContainer
+var _wrap_ach: PanelContainer
 var _audio_btn: Button
 
 
@@ -82,6 +86,36 @@ func _card_style() -> StyleBoxFlat:
 	return sb
 
 
+func _card_style_no_margin() -> StyleBoxFlat:
+	var sb := _card_style()
+	sb.set_content_margin_all(0)
+	return sb
+
+
+func _transparent_padding_style() -> StyleBoxFlat:
+	# Keep the same content padding as cards, but draw nothing.
+	var sb := _card_style()
+	sb.bg_color = Color(0, 0, 0, 0)
+	sb.border_color = Color(0, 0, 0, 0)
+	sb.set_border_width_all(0)
+	return sb
+
+
+func _add_centered_row(btn: Button) -> HBoxContainer:
+	if btn == null:
+		return null
+	var cc := CenterContainer.new()
+	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	btn.add_child(cc)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override(&"separation", 4)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cc.add_child(row)
+	return row
+
+
 func _panel_style() -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = _PANEL_BG
@@ -93,12 +127,12 @@ func _panel_style() -> StyleBoxFlat:
 
 
 func _mini_icon_rect(tex: Texture2D) -> TextureRect:
-	var tr := TextureRect.new()
-	tr.custom_minimum_size = Vector2(22, 22)
-	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tr.texture = tex
-	return tr
+	var icon_rect := TextureRect.new()
+	icon_rect.custom_minimum_size = Vector2(22, 22)
+	icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon_rect.texture = tex
+	return icon_rect
 
 
 func _apply_bar_theme(bar: ProgressBar, fill: Color) -> void:
@@ -120,12 +154,30 @@ func _thin_bar(bar: ProgressBar, fill: Color) -> void:
 	_apply_bar_theme(bar, fill)
 
 
-func _style_tile_button(btn: Button) -> void:
+## Gold / AC tiles use `PanelContainer` cards; match that chrome for clickable inventory / rumors / achievements.
+func _panel_wrapped_click_tile(btn: Button) -> PanelContainer:
+	var tile := PanelContainer.new()
+	tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tile.custom_minimum_size.y = maxf(tile.custom_minimum_size.y, _TILE_MIN_HEIGHT_PX)
+	# Background/border come from the wrapper; inner padding comes from the button stylebox.
+	tile.add_theme_stylebox_override(&"panel", _card_style_no_margin())
+	# IMPORTANT: avoid full-rect anchors here — a fully-anchored child doesn't contribute min-size,
+	# which can cause the row height to collapse and the tile to render under adjacent separators.
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	btn.custom_minimum_size.y = maxf(btn.custom_minimum_size.y, _TILE_MIN_HEIGHT_PX)
 	btn.flat = true
 	btn.focus_mode = Control.FOCUS_NONE
-	btn.add_theme_stylebox_override(&"normal", _card_style())
-	btn.add_theme_stylebox_override(&"hover", _card_style())
-	btn.add_theme_stylebox_override(&"pressed", _card_style())
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var pad := _transparent_padding_style()
+	btn.add_theme_stylebox_override(&"normal", pad)
+	btn.add_theme_stylebox_override(&"hover", pad)
+	btn.add_theme_stylebox_override(&"pressed", pad)
+	btn.add_theme_stylebox_override(&"disabled", pad)
+	btn.mouse_entered.connect(func() -> void: tile.modulate = Color(1.05, 1.05, 1.05))
+	btn.mouse_exited.connect(func() -> void: tile.modulate = Color.WHITE)
+	tile.add_child(btn)
+	return tile
 
 
 func _build() -> void:
@@ -383,11 +435,7 @@ func _build() -> void:
 	g_row.add_child(_gold_val)
 
 	_btn_spec = Button.new()
-	_btn_spec.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_tile_button(_btn_spec)
-	var spec_inner := HBoxContainer.new()
-	spec_inner.add_theme_constant_override(&"separation", 4)
-	_btn_spec.add_child(spec_inner)
+	var spec_inner := _add_centered_row(_btn_spec)
 	spec_inner.add_child(_mini_icon_rect(_tex("special_item.png")))
 	_spec_val = Label.new()
 	_spec_val.text = "0"
@@ -397,7 +445,8 @@ func _build() -> void:
 	_spec_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	spec_inner.add_child(_spec_val)
 	_btn_spec.pressed.connect(func() -> void: special_items_pressed.emit())
-	row_gs.add_child(_btn_spec)
+	_wrap_spec = _panel_wrapped_click_tile(_btn_spec)
+	row_gs.add_child(_wrap_spec)
 
 	# Rumors | Achievements
 	var row_ra := HBoxContainer.new()
@@ -406,11 +455,7 @@ func _build() -> void:
 	_body.add_child(row_ra)
 
 	_btn_rumors = Button.new()
-	_btn_rumors.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_tile_button(_btn_rumors)
-	var rum_inner := HBoxContainer.new()
-	rum_inner.add_theme_constant_override(&"separation", 4)
-	_btn_rumors.add_child(rum_inner)
+	var rum_inner := _add_centered_row(_btn_rumors)
 	rum_inner.add_child(_mini_icon_rect(_tex("open_scroll.png")))
 	_rum_val = Label.new()
 	_rum_val.text = "0"
@@ -420,14 +465,11 @@ func _build() -> void:
 	_rum_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	rum_inner.add_child(_rum_val)
 	_btn_rumors.pressed.connect(func() -> void: rumors_pressed.emit())
-	row_ra.add_child(_btn_rumors)
+	_wrap_rumors = _panel_wrapped_click_tile(_btn_rumors)
+	row_ra.add_child(_wrap_rumors)
 
 	_btn_ach = Button.new()
-	_btn_ach.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_tile_button(_btn_ach)
-	var ach_inner := HBoxContainer.new()
-	ach_inner.add_theme_constant_override(&"separation", 4)
-	_btn_ach.add_child(ach_inner)
+	var ach_inner := _add_centered_row(_btn_ach)
 	ach_inner.add_child(_mini_icon_rect(_tex("victory.png")))
 	_ach_val = Label.new()
 	_ach_val.text = "0"
@@ -437,7 +479,8 @@ func _build() -> void:
 	_ach_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	ach_inner.add_child(_ach_val)
 	_btn_ach.pressed.connect(func() -> void: achievements_pressed.emit())
-	row_ra.add_child(_btn_ach)
+	_wrap_ach = _panel_wrapped_click_tile(_btn_ach)
+	row_ra.add_child(_wrap_ach)
 
 	# Alignment
 	var al_card := PanelContainer.new()
@@ -566,9 +609,9 @@ func refresh(p: Dictionary) -> void:
 	_align_bar.value = aw * 100.0
 
 	var net_ok: bool = bool(p.get("session_active", false))
-	_btn_rumors.visible = net_ok
-	_btn_spec.visible = net_ok
-	_btn_ach.visible = net_ok
+	_wrap_rumors.visible = net_ok
+	_wrap_spec.visible = net_ok
+	_wrap_ach.visible = net_ok
 
 	var gh: bool = bool(p.get("guards_hostile", false))
 	_title.tooltip_text = (

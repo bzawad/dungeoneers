@@ -36,6 +36,8 @@ const SOLO_LOCAL_PEER_ID := 2
 
 ## CMB-02: Explorer `monster_turn_system.ex` schedules `{:trigger_monster_combat}` after 400ms so the monster move animation can play.
 const MONSTER_COMBAT_UI_DELAY_SEC := 0.4
+## Explorer `CombatSystem` — `Process.send_after(..., 1000)` before `process_monster_turn` / round monster-first.
+const COMBAT_MONSTER_STRIKE_DELAY_SEC := 1.0
 ## Set to `>= 0` in tests (`check_parse.gd`) to skip real-time delay; default **-1** = use `MONSTER_COMBAT_UI_DELAY_SEC`.
 static var monster_combat_ui_delay_sec_for_tests: float = -1.0
 ## Explorer `PathfindingHook` cadence — delay between authoritative path cells (`dungeon_session.gd` `PATH_VISUAL_STEP_SEC` historically).
@@ -162,6 +164,8 @@ var _server_level_up_waiting: Dictionary = {}
 var _server_combat_by_peer: Dictionary = {}
 ## CMB-02: per-peer serial bumped when scheduling delayed encounter; cleared on map transition; `erase` on disconnect.
 var _monster_combat_delay_serial_by_peer: Dictionary = {}
+## Interactive combat: bump invalidates pending `SceneTreeTimer` before deferred monster strike (Explorer 1s beat).
+var _combat_monster_strike_serial_by_peer: Dictionary = {}
 ## Server: stepped `rpc_request_path_move` — bump invalidates pending `SceneTreeTimer` callbacks (Explorer one `move_player` per tile).
 var _path_move_serial_by_peer: Dictionary = {}
 ## Server: peer_id -> remaining `Vector2i` steps (king-adjacent cells to enter in order).
@@ -428,6 +432,7 @@ func configure_authority(
 	_torch_burn_by_peer.clear()
 	_torch_count_by_peer.clear()
 	_server_combat_by_peer.clear()
+	_combat_monster_strike_serial_by_peer.clear()
 	_path_move_serial_by_peer.clear()
 	_path_move_queue_by_peer.clear()
 	_path_move_door_after_by_peer.clear()
@@ -2095,6 +2100,66 @@ func _server_apply_combat_outcome(sender: int, cell: Vector2i, outcome: Dictiona
 	)
 
 
+func _server_cancel_combat_monster_strike_timer(peer_id: int) -> void:
+	_combat_monster_strike_serial_by_peer[peer_id] = (
+		int(_combat_monster_strike_serial_by_peer.get(peer_id, 0)) + 1
+	)
+
+
+func _server_apply_finished_combat_to_snapshot(snap: Dictionary, outcome: Dictionary) -> void:
+	snap["finished"] = true
+	snap["victory"] = bool(outcome.get("victory", false))
+	snap["flee_success"] = bool(outcome.get("flee_success", false))
+	snap["victory_treasure_gold"] = maxi(0, int(outcome.get("treasure_gold", 0)))
+	snap["outcome_title"] = str(outcome.get("title", "Combat"))
+	snap["outcome_body"] = str(outcome.get("body", ""))
+	snap["log_full"] = str(outcome.get("body", ""))
+
+
+func _server_schedule_pending_monster_strike(peer_id: int) -> void:
+	if not _using_solo_local() and not multiplayer.is_server():
+		return
+	var session_chk: Variant = _server_combat_by_peer.get(peer_id)
+	if session_chk == null:
+		return
+	if not session_chk.monster_turn_pending():
+		return
+	_server_cancel_combat_monster_strike_timer(peer_id)
+	var serial := int(_combat_monster_strike_serial_by_peer.get(peer_id, 0))
+	var delay_timer := get_tree().create_timer(COMBAT_MONSTER_STRIKE_DELAY_SEC, false, false, true)
+	delay_timer.timeout.connect(
+		func() -> void: _server_fire_pending_monster_strike(peer_id, serial), CONNECT_ONE_SHOT
+	)
+
+
+func _server_fire_pending_monster_strike(peer_id: int, serial: int) -> void:
+	if not is_instance_valid(self):
+		return
+	if not _using_solo_local() and not multiplayer.is_server():
+		return
+	if int(_combat_monster_strike_serial_by_peer.get(peer_id, 0)) != serial:
+		return
+	var session: Variant = _server_combat_by_peer.get(peer_id)
+	if session == null:
+		return
+	if not session.monster_turn_pending():
+		return
+	var combat_cell: Vector2i = session.cell
+	var snap: Dictionary = session.advance_monster_turn()
+	snap["cell_x"] = combat_cell.x
+	snap["cell_y"] = combat_cell.y
+	if session.finished:
+		var outcome: Dictionary = session.build_finish_outcome()
+		_server_combat_by_peer.erase(peer_id)
+		_server_apply_combat_outcome(peer_id, combat_cell, outcome)
+		_server_apply_finished_combat_to_snapshot(snap, outcome)
+		_deliver_combat_snapshot_to_peer(peer_id, snap)
+		return
+	_deliver_combat_snapshot_to_peer(peer_id, snap)
+	if session.monster_turn_pending():
+		_server_schedule_pending_monster_strike(peer_id)
+
+
 func _server_handle_encounter_fight(sender: int, cell: Vector2i) -> void:
 	_server_pending_npc_quest.erase(sender)
 	if not _server_encounter_cell_ok(sender, cell):
@@ -2105,6 +2170,7 @@ func _server_handle_encounter_fight(sender: int, cell: Vector2i) -> void:
 	var start_hp: int = int(
 		_server_player_hp.get(sender, PlayerCombatStats.starting_hit_points_for_role(role_c))
 	)
+	_server_cancel_combat_monster_strike_timer(sender)
 	var session := CombatResolver.create_interactive_combat(
 		_authority_seed, cell, mname, start_hp, role_c, _server_stat_line_for_combat(sender)
 	)
@@ -2113,6 +2179,8 @@ func _server_handle_encounter_fight(sender: int, cell: Vector2i) -> void:
 	snap["cell_x"] = cell.x
 	snap["cell_y"] = cell.y
 	_deliver_combat_snapshot_to_peer(sender, snap)
+	if session.monster_turn_pending():
+		_server_schedule_pending_monster_strike(sender)
 
 
 func _server_handle_combat_player_attack(sender: int) -> void:
@@ -2124,16 +2192,17 @@ func _server_handle_combat_player_attack(sender: int) -> void:
 	snap["cell_x"] = cell.x
 	snap["cell_y"] = cell.y
 	if session.finished:
+		_server_cancel_combat_monster_strike_timer(sender)
 		var outcome: Dictionary = session.build_finish_outcome()
 		_server_combat_by_peer.erase(sender)
 		_server_apply_combat_outcome(sender, cell, outcome)
-		snap["finished"] = true
-		snap["victory"] = bool(outcome.get("victory", false))
-		snap["flee_success"] = bool(outcome.get("flee_success", false))
-		snap["victory_treasure_gold"] = maxi(0, int(outcome.get("treasure_gold", 0)))
-		snap["outcome_title"] = str(outcome.get("title", "Combat"))
-		snap["outcome_body"] = str(outcome.get("body", ""))
-		snap["log_full"] = str(outcome.get("body", ""))
+		_server_apply_finished_combat_to_snapshot(snap, outcome)
+		_deliver_combat_snapshot_to_peer(sender, snap)
+		return
+	if session.monster_turn_pending():
+		_deliver_combat_snapshot_to_peer(sender, snap)
+		_server_schedule_pending_monster_strike(sender)
+		return
 	_deliver_combat_snapshot_to_peer(sender, snap)
 
 
@@ -2146,17 +2215,14 @@ func _server_handle_combat_flee(sender: int) -> void:
 	snap_f["cell_x"] = cell_f.x
 	snap_f["cell_y"] = cell_f.y
 	if session_f.finished:
+		_server_cancel_combat_monster_strike_timer(sender)
 		var outcome_f: Dictionary = session_f.build_finish_outcome()
 		_server_combat_by_peer.erase(sender)
 		_server_apply_combat_outcome(sender, cell_f, outcome_f)
-		snap_f["finished"] = true
-		snap_f["victory"] = bool(outcome_f.get("victory", false))
-		snap_f["flee_success"] = bool(outcome_f.get("flee_success", false))
-		snap_f["victory_treasure_gold"] = maxi(0, int(outcome_f.get("treasure_gold", 0)))
-		snap_f["outcome_title"] = str(outcome_f.get("title", "Combat"))
-		snap_f["outcome_body"] = str(outcome_f.get("body", ""))
-		snap_f["log_full"] = str(outcome_f.get("body", ""))
+		_server_apply_finished_combat_to_snapshot(snap_f, outcome_f)
 	_deliver_combat_snapshot_to_peer(sender, snap_f)
+	if not session_f.finished and session_f.monster_turn_pending():
+		_server_schedule_pending_monster_strike(sender)
 
 
 func _server_handle_encounter_evade(sender: int, cell: Vector2i) -> void:
@@ -2853,6 +2919,8 @@ func run_headless_combat_probe() -> void:
 				if bool(snap.get("can_attack", false)):
 					client_request_combat_player_attack()
 					attacks += 1
+				elif bool(snap.get("monster_strike_pending", false)):
+					pass
 				elif snap.is_empty():
 					pass
 			push_error("[Dungeoneers] combat_probe timed out (no finished snapshot)")
@@ -4068,6 +4136,7 @@ func _server_start_combat_with_monster(sender: int, rng_cell: Vector2i, mname: S
 	var start_hp_cm: int = int(
 		_server_player_hp.get(sender, PlayerCombatStats.starting_hit_points_for_role(role_cm))
 	)
+	_server_cancel_combat_monster_strike_timer(sender)
 	var session_cm := CombatResolver.create_interactive_combat(
 		_authority_seed, rng_cell, mname, start_hp_cm, role_cm, _server_stat_line_for_combat(sender)
 	)
@@ -4076,6 +4145,8 @@ func _server_start_combat_with_monster(sender: int, rng_cell: Vector2i, mname: S
 	snap_cm["cell_x"] = rng_cell.x
 	snap_cm["cell_y"] = rng_cell.y
 	_deliver_combat_snapshot_to_peer(sender, snap_cm)
+	if session_cm.monster_turn_pending():
+		_server_schedule_pending_monster_strike(sender)
 
 
 func _server_handle_world_interaction(sender: int, cell: Vector2i) -> void:
@@ -5919,6 +5990,8 @@ func _on_server_peer_disconnected(peer_id: int) -> void:
 	_server_investigated_features.erase(peer_id)
 	_server_rumor_xp_pending.erase(peer_id)
 	_server_combat_by_peer.erase(peer_id)
+	_server_cancel_combat_monster_strike_timer(peer_id)
+	_combat_monster_strike_serial_by_peer.erase(peer_id)
 	_monster_combat_delay_serial_by_peer.erase(peer_id)
 	_peer_roles.erase(peer_id)
 	_peer_display_names.erase(peer_id)

@@ -20,7 +20,7 @@ extends Node
 ## - **death** — combat_system.ex → play_death_sting()
 ## - **door_open** — door_system.ex → play_door_open()
 ## - **fight** — dungeon_live.ex, wandering_monster_system.ex, combat → play_combat_sfx("fight", …)
-## - **monster_hit** — trap_system.ex, combat_system.ex → play_combat_sfx("monster_hit", …) (orc → orch_hit.mp3)
+## - **monster_hit** — trap_system.ex, combat_system.ex → play_combat_sfx("monster_hit", …) → monster_hit.mp3
 ## - **monster_miss** — combat_system.ex → play_combat_sfx("monster_miss", …)
 ## - **orch_hit** — dungeon_live.ex, combat_system.ex level-up, quest_item_system.ex → play_quest_completion_fanfare / play_level_up_hit
 ## - **pickup** — dungeon_live.ex, food_system.ex, healing_potion_system.ex → play_pickup()
@@ -183,9 +183,8 @@ func play_death_sting() -> void:
 	play_file("death.mp3")
 
 
-func play_combat_sfx(sound_id: String, monster_display: String = "") -> void:
-	var use_orch := sound_id == "monster_hit" and monster_display.to_lower().contains("orc")
-	var file := "orch_hit.mp3" if use_orch else _sfx_file_for_id(sound_id)
+func play_combat_sfx(sound_id: String, _monster_display: String = "") -> void:
+	var file := _sfx_file_for_id(sound_id)
 	if file.is_empty():
 		return
 	var vol := -3.0 if sound_id.begins_with("player") else -2.0
