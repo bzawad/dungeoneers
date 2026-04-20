@@ -16,6 +16,7 @@ const ExplorerAudioScript := preload("res://dungeon/audio/explorer_audio.gd")
 const ExplorerModalChrome := preload("res://dungeon/ui/explorer_modal_chrome.gd")
 const PartyMarkerArt := preload("res://dungeon/ui/party_marker_art.gd")
 const EncounterMapToken := preload("res://dungeon/ui/encounter_map_token.gd")
+const PlayerCombatStats := preload("res://dungeon/combat/player_combat_stats.gd")
 
 const _EXPLORER_IMG_DIR := "res://assets/explorer/images/"
 
@@ -79,7 +80,6 @@ var _room_trap_disarm_btn: Button = null
 var _room_trap_leave_btn: Button = null
 var _pending_room_trap_cell: Vector2i = Vector2i.ZERO
 var _rumors_lines: PackedStringArray = PackedStringArray()
-var _rumors_list_btn: Button = null
 var _rumors_list_window: Window = null
 var _rumors_item_list: ItemList = null
 var _rumors_list_hint: Label = null
@@ -87,14 +87,12 @@ var _rumors_view_btn: Button = null
 var _rumors_close_btn: Button = null
 var _quest_rows: PackedStringArray = PackedStringArray()
 var _special_item_keys: PackedStringArray = PackedStringArray()
-var _special_items_list_btn: Button = null
 var _special_items_list_window: Window = null
 var _special_items_item_list: ItemList = null
 var _special_items_list_hint: Label = null
 var _special_items_view_btn: Button = null
 var _special_items_close_btn: Button = null
 var _achievements_lines: PackedStringArray = PackedStringArray()
-var _achievements_list_btn: Button = null
 var _achievements_list_window: Window = null
 var _achievements_item_list: ItemList = null
 var _achievements_list_hint: Label = null
@@ -165,8 +163,8 @@ var _cb_fog_clicked_delta: Callable
 var _net_view_signals_bound: bool = false
 var _secret_door_notice: AcceptDialog = null
 var _stats_layer: CanvasLayer = null
-var _stats_label: Label = null
-var _audio_settings_btn: Button = null
+var _stats_hud_root: Control = null
+var _stats_sidebar: ExplorerStatsSidebar = null
 var _audio_settings_window: Window = null
 var _audio_sfx_slider: HSlider = null
 var _audio_music_slider: HSlider = null
@@ -180,6 +178,13 @@ var _last_xp_to_next: int = 500
 var _last_player_alignment: int = 0
 ## Explorer `npcs_killed_count` (replicated via `player_local_stats_changed`).
 var _last_npcs_killed: int = 0
+var _last_healing_potions: int = 0
+var _last_armor_class: int = 0
+var _last_attack_bonus: int = 0
+var _last_weapon_name: String = ""
+var _last_weapon_damage_dice: String = ""
+var _hud_theme_title: String = ""
+var _hud_dungeon_level: int = 1
 ## P7-09: co-op / solo display name from welcome + `player_display_name_changed`.
 var _last_display_name: String = "Explorer"
 ## Phase 3: from welcome (`listen_port` / `party_peer_count`); empty for solo.
@@ -265,6 +270,13 @@ func start_local(authority_seed: int, theme_direction: String) -> void:
 	view.set_view_center_from_cell(DungeonGridView.find_starting_cell_for_camera(result["grid"]))
 	_welcome_fog_type = str(result.get("fog_type", "dim"))
 	view.configure_fog(false, {}, _welcome_fog_type)
+	_hud_theme_title = "Ancient Castle" if theme == "up" else "Dark Caverns"
+	_hud_dungeon_level = 1
+	var st0: Dictionary = PlayerCombatStats.for_role("rogue")
+	_last_armor_class = int(st0.get("armor_class", 12))
+	_last_attack_bonus = int(st0.get("attack_bonus", 1))
+	_last_weapon_name = str(st0.get("player_weapon", "Dagger"))
+	_last_weapon_damage_dice = str(st0.get("weapon_damage_dice", "1d4"))
 	_ensure_stats_hud()
 	_refresh_stats_hud_text()
 
@@ -316,6 +328,7 @@ func start_from_grid(
 		view.set_view_center_from_cell(_net_local_cell)
 		_apply_display_name_from_welcome(welcome)
 		_apply_welcome_peer_display_names(welcome)
+		_apply_hud_welcome_metadata(welcome)
 		_welcome_join_hud_tail = JoinMetadata.welcome_hud_tail(welcome)
 		# Show the player marker immediately at the spawn cell — `player_position_updated`
 		# fires during the authority sync, before `start_from_grid` connects to the signal,
@@ -466,6 +479,7 @@ func reload_from_authority(grid: Dictionary, seed_for_log: int, welcome: Diction
 	view.set_view_center_from_cell(_net_local_cell)
 	_apply_display_name_from_welcome(welcome)
 	_apply_welcome_peer_display_names(welcome)
+	_apply_hud_welcome_metadata(welcome)
 	_welcome_join_hud_tail = JoinMetadata.welcome_hud_tail(welcome)
 	# Show the player marker at the new spawn cell immediately after reload.
 	var init_burn1 := _initial_torch_burn_for_welcome(welcome)
@@ -500,6 +514,8 @@ func reload_from_authority(grid: Dictionary, seed_for_log: int, welcome: Diction
 	if view.has_method("set_guards_hostile"):
 		view.set_guards_hostile(_hud_guards_hostile)
 	_explorer_audio().start_wander_music_from_seed(seed_for_log)
+	_ensure_stats_hud()
+	_refresh_stats_hud_text()
 
 
 func _ensure_secret_door_notice_dialog() -> void:
@@ -2566,7 +2582,6 @@ func _apply_display_name_from_welcome(welcome: Dictionary) -> void:
 	if d.is_empty():
 		d = "Explorer"
 	_last_display_name = d
-	_refresh_stats_hud_text()
 
 
 func _on_player_display_name_changed(new_display_name: String) -> void:
@@ -2629,6 +2644,16 @@ func _apply_welcome_peer_display_names(welcome: Dictionary) -> void:
 		if dn.is_empty():
 			dn = "Explorer"
 		_peer_display_names_by_id[my_id] = dn
+
+
+func _apply_hud_welcome_metadata(welcome: Dictionary) -> void:
+	var tn := str(welcome.get("theme_name", "")).strip_edges()
+	if not tn.is_empty():
+		_hud_theme_title = tn
+	elif _hud_theme_title.is_empty():
+		_hud_theme_title = "Dungeon"
+	_hud_dungeon_level = maxi(1, int(welcome.get("dungeon_level", 1)))
+	_refresh_stats_hud_text()
 
 
 func _on_peer_display_names_updated(names: Dictionary) -> void:
@@ -2850,51 +2875,36 @@ func _on_world_dialog_confirmed() -> void:
 
 
 func _ensure_stats_hud() -> void:
-	if _stats_label != null:
+	if _stats_sidebar != null:
 		return
 	_stats_layer = CanvasLayer.new()
 	_stats_layer.layer = 30
 	add_child(_stats_layer)
+	_stats_hud_root = Control.new()
+	_stats_hud_root.name = "StatsHudRoot"
+	_stats_hud_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_stats_hud_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stats_layer.add_child(_stats_hud_root)
+
 	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	margin.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	margin.anchor_right = 0.0
 	margin.offset_left = 8
 	margin.offset_top = 8
-	_stats_layer.add_child(margin)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	margin.add_child(row)
-	_stats_label = Label.new()
-	_stats_label.text = "Gold: 0  Lv 1  XP: 0 (500 to next)  HP: 0/0"
-	_stats_label.add_theme_font_size_override("font_size", 16)
-	_stats_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(_stats_label)
-	_rumors_list_btn = Button.new()
-	_rumors_list_btn.name = "RumorsListButton"
-	_rumors_list_btn.text = "Rumors"
-	_rumors_list_btn.tooltip_text = "View collected rumors (Explorer show_rumors_list)"
-	_rumors_list_btn.visible = false
-	_rumors_list_btn.pressed.connect(_on_rumors_list_button_pressed)
-	row.add_child(_rumors_list_btn)
-	_special_items_list_btn = Button.new()
-	_special_items_list_btn.name = "SpecialItemsListButton"
-	_special_items_list_btn.text = "Special items"
-	_special_items_list_btn.tooltip_text = "View carried special items (Explorer show_special_items_list)"
-	_special_items_list_btn.visible = false
-	_special_items_list_btn.pressed.connect(_on_special_items_list_button_pressed)
-	row.add_child(_special_items_list_btn)
-	_achievements_list_btn = Button.new()
-	_achievements_list_btn.name = "AchievementsListButton"
-	_achievements_list_btn.text = "Achievements"
-	_achievements_list_btn.tooltip_text = "View quest achievements (Explorer show_achievements_list)"
-	_achievements_list_btn.visible = false
-	_achievements_list_btn.pressed.connect(_on_achievements_list_button_pressed)
-	row.add_child(_achievements_list_btn)
-	_audio_settings_btn = Button.new()
-	_audio_settings_btn.name = "AudioSettingsButton"
-	_audio_settings_btn.text = "Audio"
-	_audio_settings_btn.tooltip_text = "SFX and music volume (Phase 7.5 AUD-04)"
-	_audio_settings_btn.pressed.connect(_on_audio_settings_button_pressed)
-	row.add_child(_audio_settings_btn)
+	margin.offset_bottom = -8
+	margin.offset_right = 8 + 276
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stats_hud_root.add_child(margin)
+
+	_stats_sidebar = ExplorerStatsSidebar.new()
+	_stats_sidebar.name = "ExplorerStatsSidebar"
+	_stats_sidebar.set_texture_loader(Callable(self, "_explorer_img_texture"))
+	_stats_sidebar.rumors_pressed.connect(_on_rumors_list_button_pressed)
+	_stats_sidebar.special_items_pressed.connect(_on_special_items_list_button_pressed)
+	_stats_sidebar.achievements_pressed.connect(_on_achievements_list_button_pressed)
+	_stats_sidebar.drink_potion_pressed.connect(_on_stats_drink_potion_pressed)
+	_stats_sidebar.audio_pressed.connect(_on_audio_settings_button_pressed)
+	margin.add_child(_stats_sidebar)
 
 
 func _ensure_audio_settings_window() -> void:
@@ -3027,69 +3037,47 @@ func _on_guards_hostile_changed(hostile: bool) -> void:
 
 
 func _refresh_stats_hud_text() -> void:
-	if _stats_label == null:
+	if _stats_sidebar == null:
 		return
-	if _rumors_list_btn != null:
-		_rumors_list_btn.visible = _net_rep != null
-		if _net_rep != null:
-			var n := _rumors_lines.size()
-			_rumors_list_btn.text = "Rumors" if n == 0 else ("Rumors (" + str(n) + ")")
-			_rumors_list_btn.disabled = false
-	if _special_items_list_btn != null:
-		_special_items_list_btn.visible = _net_rep != null
-		if _net_rep != null:
-			var ns := _special_item_keys.size()
-			_special_items_list_btn.text = (
-				"Special items" if ns == 0 else ("Special items (" + str(ns) + ")")
-			)
-			_special_items_list_btn.disabled = false
-	if _achievements_list_btn != null:
-		_achievements_list_btn.visible = _net_rep != null
-		if _net_rep != null:
-			var na := _achievements_lines.size()
-			_achievements_list_btn.text = (
-				"Achievements" if na == 0 else ("Achievements (" + str(na) + ")")
-			)
-			_achievements_list_btn.disabled = false
-	var tail := "  |  Guards: hostile" if _hud_guards_hostile else ""
-	if _rumors_lines.size() > 0:
-		tail += "  |  Rumors: " + str(_rumors_lines.size())
-	if _special_item_keys.size() > 0:
-		tail += "  |  Special items: " + str(_special_item_keys.size())
-	var aq := _active_quest_count()
-	if aq > 0:
-		tail += "  |  Active quests: " + str(aq)
-	if _achievements_lines.size() > 0:
-		tail += "  |  Achievements: " + str(_achievements_lines.size())
-	if _hud_torch_burn >= 0:
-		if _hud_torch_spares >= 0:
-			tail += "  |  Torch: " + str(_hud_torch_burn) + "%  Spares: " + str(_hud_torch_spares)
-		else:
-			tail += "  |  Torch: daylight"
-	else:
-		tail += "  |  Torch: n/a"
-	tail += "  |  Align: " + PlayerAlignment.description_from_value(_last_player_alignment)
-	if _last_npcs_killed > 0:
-		tail += "  |  NPC kills: " + str(_last_npcs_killed)
-	if _net_rep != null and not _last_display_name.is_empty():
-		tail += "  |  Name: " + _last_display_name
-	if not _welcome_join_hud_tail.is_empty():
-		tail += _welcome_join_hud_tail
-	_stats_label.text = (
-		"Gold: "
-		+ str(_last_gold)
-		+ "  Lv "
-		+ str(_last_level)
-		+ "  XP: "
-		+ str(_last_xp)
-		+ " ("
-		+ str(_last_xp_to_next)
-		+ " to next)  HP: "
-		+ str(_last_hp)
-		+ "/"
-		+ str(_last_max_hp)
-		+ tail
+	var theme_disp := _hud_theme_title
+	if theme_disp.is_empty():
+		theme_disp = "Dungeon"
+	var show_torch: bool = _hud_torch_burn >= 0 and _welcome_fog_type.strip_edges() != "daylight"
+	## Explorer `use_healing_potion`: disabled when no potions or already at max HP.
+	var can_drink: bool = (
+		_last_healing_potions > 0
+		and _last_hp < _last_max_hp
+		and _net_rep != null
+		and _net_rep.has_method("client_request_use_healing_potion")
 	)
+	var ad := PlayerAlignment.description_from_value(_last_player_alignment)
+	var p := {
+		"theme_title": theme_disp,
+		"dungeon_level": _hud_dungeon_level,
+		"gold": _last_gold,
+		"xp": _last_xp,
+		"hp": _last_hp,
+		"max_hp": _last_max_hp,
+		"level": _last_level,
+		"xp_to_next": _last_xp_to_next,
+		"healing_potion_count": _last_healing_potions,
+		"armor_class": _last_armor_class,
+		"attack_bonus": _last_attack_bonus,
+		"weapon_name": _last_weapon_name,
+		"weapon_damage_dice": _last_weapon_damage_dice,
+		"show_torch": show_torch,
+		"torch_burn_pct": _hud_torch_burn,
+		"torch_spares": _hud_torch_spares,
+		"can_use_potion": can_drink,
+		"special_item_count": _special_item_keys.size(),
+		"rumors_count": _rumors_lines.size(),
+		"achievements_count": _achievements_lines.size(),
+		"alignment_desc": ad,
+		"alignment_value": _last_player_alignment,
+		"session_active": _net_rep != null,
+		"guards_hostile": _hud_guards_hostile,
+	}
+	_stats_sidebar.refresh(p)
 
 
 func _ensure_rumors_list_window() -> void:
@@ -3546,7 +3534,12 @@ func _on_player_local_stats_changed(
 	level: int,
 	xp_to_next: int,
 	player_alignment: int,
-	npcs_killed: int
+	npcs_killed: int,
+	healing_potion_count: int,
+	armor_class: int,
+	attack_bonus: int,
+	weapon_name: String,
+	weapon_damage_dice: String
 ) -> void:
 	_last_gold = gold
 	_last_xp = xp
@@ -3556,6 +3549,11 @@ func _on_player_local_stats_changed(
 	_last_xp_to_next = xp_to_next
 	_last_player_alignment = player_alignment
 	_last_npcs_killed = npcs_killed
+	_last_healing_potions = healing_potion_count
+	_last_armor_class = armor_class
+	_last_attack_bonus = attack_bonus
+	_last_weapon_name = weapon_name
+	_last_weapon_damage_dice = weapon_damage_dice
 	_hud_torch_burn = torch_burn_pct
 	_hud_torch_spares = torch_spares
 	if _local_peer_id >= 0 and torch_burn_pct >= 0:
@@ -3564,6 +3562,14 @@ func _on_player_local_stats_changed(
 	_refresh_stats_hud_text()
 	if _local_peer_id >= 0:
 		_refresh_cached_marker_for_peer(_local_peer_id)
+
+
+func _on_stats_drink_potion_pressed() -> void:
+	if _net_rep == null:
+		return
+	if _net_rep.has_method("client_request_use_healing_potion"):
+		_net_rep.client_request_use_healing_potion()
+	_explorer_audio().play_pickup()
 
 
 func _on_net_fog_delta(cells: PackedVector2Array, view: Node2D) -> void:

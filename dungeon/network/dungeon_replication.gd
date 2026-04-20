@@ -86,6 +86,7 @@ signal authority_tile_patched(cell: Vector2i, new_tile: String)
 ## `level` / `xp_to_next` are **this peer's** Explorer `PlayerStats` curve; dungeon regen uses **max** party level (see `_authority_recompute_player_level_from_party_xp`).
 ## `player_alignment` is Explorer `player_alignment` (numeric; shifts in P7-03+).
 ## `npcs_killed` mirrors Explorer `npcs_killed_count` (peaceful npc/guard while guards not hostile).
+## `healing_potion_count` — Explorer `healing_potion_count` inventory. Combat line mirrors Explorer dashboard assigns.
 signal player_local_stats_changed(
 	gold: int,
 	xp: int,
@@ -96,7 +97,12 @@ signal player_local_stats_changed(
 	level: int,
 	xp_to_next: int,
 	player_alignment: int,
-	npcs_killed: int
+	npcs_killed: int,
+	healing_potion_count: int,
+	armor_class: int,
+	attack_bonus: int,
+	weapon_name: String,
+	weapon_damage_dice: String
 )
 ## Phase 5: Explorer `rumors` assign — replicated list for HUD / future rumors dialog.
 signal player_rumors_updated(rumors: PackedStringArray)
@@ -142,6 +148,8 @@ var _server_xp: Dictionary = {}
 var _server_player_alignment: Dictionary = {}
 ## Explorer `npcs_killed_count` — per peer; reset on new floor (`_server_apply_map_transition`).
 var _server_npcs_killed_by_peer: Dictionary = {}
+## Explorer `healing_potion_count` — carried potions (pickup adds; HUD drink consumes).
+var _server_healing_potions_by_peer: Dictionary = {}
 ## Server: peer combat HP (Explorer `player_hit_points`; talents + rolled level HP in **P7-01**).
 var _server_player_hp: Dictionary = {}
 var _server_player_max_hp: Dictionary = {}
@@ -377,6 +385,7 @@ func configure_authority(
 	_server_xp.clear()
 	_server_player_alignment.clear()
 	_server_npcs_killed_by_peer.clear()
+	_server_healing_potions_by_peer.clear()
 	_server_player_hp.clear()
 	_server_player_max_hp.clear()
 	_server_talent_bonuses_by_peer.clear()
@@ -666,6 +675,8 @@ func begin_solo_local_session(join_role: String, solo_display_name: String = "")
 	var sx0 := int(_server_xp.get(_solo_offline_peer, 0))
 	var sl0 := PlayerProgression.calculate_level(sx0)
 	var sn0 := PlayerProgression.xp_needed_for_next_level(sx0)
+	var pot0 := int(_server_healing_potions_by_peer.get(_solo_offline_peer, 0))
+	var sl0b: Dictionary = _server_stat_line_for_combat(_solo_offline_peer)
 	player_local_stats_changed.emit(
 		int(_server_gold.get(_solo_offline_peer, 0)),
 		sx0,
@@ -684,7 +695,12 @@ func begin_solo_local_session(join_role: String, solo_display_name: String = "")
 		sl0,
 		sn0,
 		int(_server_player_alignment.get(_solo_offline_peer, PlayerAlignment.starting_alignment())),
-		int(_server_npcs_killed_by_peer.get(_solo_offline_peer, 0))
+		int(_server_npcs_killed_by_peer.get(_solo_offline_peer, 0)),
+		pot0,
+		int(sl0b.get("armor_class", PlayerCombatStats.BASE_ARMOR_CLASS)),
+		int(sl0b.get("attack_bonus", PlayerCombatStats.BASE_ATTACK_BONUS)),
+		str(sl0b.get("player_weapon", "")).strip_edges(),
+		str(sl0b.get("weapon_damage_dice", "")).strip_edges()
 	)
 	_server_broadcast_special_items_to_peer(_solo_offline_peer)
 	_server_broadcast_quests_to_peer(_solo_offline_peer)
@@ -819,6 +835,17 @@ func client_request_pickup_dismiss(kind: String, cell_x: int, cell_y: int) -> vo
 	if multiplayer.multiplayer_peer == null:
 		return
 	rpc_request_pickup_dismiss.rpc_id(SERVER_PEER_ID, kind, cell_x, cell_y)
+
+
+func client_request_use_healing_potion() -> void:
+	if _using_solo_local():
+		_server_handle_use_healing_potion(_solo_offline_peer)
+		return
+	if multiplayer.is_server():
+		return
+	if multiplayer.multiplayer_peer == null:
+		return
+	rpc_request_use_healing_potion.rpc_id(SERVER_PEER_ID)
 
 
 func client_request_room_trap_undetected_ack(cell_x: int, cell_y: int) -> void:
@@ -1145,12 +1172,55 @@ func _emit_stats_for_peer(peer_id: int) -> void:
 	var torch_h := _torch_hud_burn_and_spares_for_peer(peer_id)
 	var pal := int(_server_player_alignment.get(peer_id, PlayerAlignment.starting_alignment()))
 	var nk := int(_server_npcs_killed_by_peer.get(peer_id, 0))
+	var pot := int(_server_healing_potions_by_peer.get(peer_id, 0))
+	var sl_emit: Dictionary = _server_stat_line_for_combat(peer_id)
+	var ac_e := int(sl_emit.get("armor_class", PlayerCombatStats.BASE_ARMOR_CLASS))
+	var ab_e := int(sl_emit.get("attack_bonus", PlayerCombatStats.BASE_ATTACK_BONUS))
+	var wn_e := str(sl_emit.get("player_weapon", "")).strip_edges()
+	var wd_e := str(sl_emit.get("weapon_damage_dice", "")).strip_edges()
 	if _using_solo_local() and peer_id == _solo_offline_peer:
-		player_local_stats_changed.emit(g, xp, hp, mx, torch_h.x, torch_h.y, plv, xnext, pal, nk)
-	elif multiplayer.multiplayer_peer != null and multiplayer.is_server():
-		rpc_player_local_stats.rpc_id(
-			peer_id, g, xp, hp, mx, torch_h.x, torch_h.y, plv, xnext, pal, nk
+		player_local_stats_changed.emit(
+			g, xp, hp, mx, torch_h.x, torch_h.y, plv, xnext, pal, nk, pot, ac_e, ab_e, wn_e, wd_e
 		)
+	elif multiplayer.multiplayer_peer != null and multiplayer.is_server():
+		## Listen host: `call_remote` RPCs do not run on the sender — mirror `level_up_dialog_offered` local emit.
+		if peer_id == multiplayer.get_unique_id():
+			player_local_stats_changed.emit(
+				g,
+				xp,
+				hp,
+				mx,
+				torch_h.x,
+				torch_h.y,
+				plv,
+				xnext,
+				pal,
+				nk,
+				pot,
+				ac_e,
+				ab_e,
+				wn_e,
+				wd_e
+			)
+		else:
+			rpc_player_local_stats.rpc_id(
+				peer_id,
+				g,
+				xp,
+				hp,
+				mx,
+				torch_h.x,
+				torch_h.y,
+				plv,
+				xnext,
+				pal,
+				nk,
+				pot,
+				ac_e,
+				ab_e,
+				wn_e,
+				wd_e
+			)
 
 
 func _server_peer_talents_dict(peer_id: int) -> Dictionary:
@@ -1184,6 +1254,8 @@ func _server_stat_line_for_combat(peer_id: int) -> Dictionary:
 		"max_hit_points": int(pst.get("max_hit_points", PlayerCombatStats.BASE_MAX_HIT_POINTS)),
 		"armor_class": int(pst.get("armor_class", PlayerCombatStats.BASE_ARMOR_CLASS)),
 		"attack_bonus": int(pst.get("attack_bonus", PlayerCombatStats.BASE_ATTACK_BONUS)),
+		"player_weapon": str(pst.get("player_weapon", "")).strip_edges(),
+		"weapon_damage_dice": str(pst.get("weapon_damage_dice", "")).strip_edges(),
 	}
 	var keys_ar: Array = _server_special_items_by_peer.get(peer_id, []) as Array
 	return SpecialItemTable.merge_equipment_into_stat_line(base_line, keys_ar)
@@ -1478,6 +1550,39 @@ func _server_maybe_post_move_special_feature(
 	print("[Dungeoneers] post_move_special_feature peer_id=", peer_id, " cell=", dst)
 
 
+func _server_handle_use_healing_potion(sender: int) -> void:
+	if not _player_positions.has(sender):
+		return
+	if _server_combat_by_peer.has(sender):
+		return
+	var cnt_h: int = int(_server_healing_potions_by_peer.get(sender, 0))
+	if cnt_h <= 0:
+		return
+	var role_h := str(_peer_roles.get(sender, "rogue"))
+	var hp_h := int(
+		_server_player_hp.get(sender, PlayerCombatStats.starting_hit_points_for_role(role_h))
+	)
+	var mx_h := int(
+		_server_player_max_hp.get(sender, PlayerCombatStats.max_hit_points_for_role(role_h))
+	)
+	if hp_h >= mx_h:
+		return
+	var rng_d := RandomNumberGenerator.new()
+	rng_d.randomize()
+	var heal_amt: int = rng_d.randi_range(1, 6)
+	_server_player_hp[sender] = mini(mx_h, hp_h + heal_amt)
+	_server_healing_potions_by_peer[sender] = cnt_h - 1
+	_emit_stats_for_peer(sender)
+	print(
+		"[Dungeoneers] use_healing_potion peer_id=",
+		sender,
+		" heal=",
+		heal_amt,
+		" potions_left=",
+		_server_healing_potions_by_peer.get(sender, 0)
+	)
+
+
 func _server_handle_pickup_dismiss(sender: int, kind: String, cell: Vector2i) -> void:
 	if not _player_positions.has(sender):
 		return
@@ -1510,11 +1615,10 @@ func _server_handle_pickup_dismiss(sender: int, kind: String, cell: Vector2i) ->
 			_emit_stats_for_peer(sender)
 			print("[Dungeoneers] food_pickup peer_id=", sender, " cell=", cell, " heal=", heal_f)
 		"healing_potion_pickup":
-			var pd: Dictionary = ConsumablePickup.potion_roll_and_actual(
-				_authority_seed, cell, hp_now, mx_now
-			)
-			var heal_p: int = int(pd["actual"])
-			_server_player_hp[sender] = mini(mx_now, hp_now + heal_p)
+			## Explorer `dismiss_healing_potion`: add to inventory, remove tile, XP — no heal until HUD drink.
+			var prev_p: int = int(_server_healing_potions_by_peer.get(sender, 0))
+			_server_healing_potions_by_peer[sender] = prev_p + 1
+			_server_add_xp_with_level_up(sender, ConsumablePickup.HEALING_POTION_DISCOVERY_XP)
 			var under_p: String = TreasureSys.underlying_tile_after_collect(cell, _authority_rooms)
 			_authority_grid[cell] = under_p
 			_notify_authority_tile_patch(cell, under_p)
@@ -1524,8 +1628,8 @@ func _server_handle_pickup_dismiss(sender: int, kind: String, cell: Vector2i) ->
 				sender,
 				" cell=",
 				cell,
-				" heal=",
-				heal_p
+				" potions=",
+				_server_healing_potions_by_peer.get(sender, 0)
 			)
 		"torch_pickup":
 			var cnt_t := int(_torch_count_by_peer.get(sender, 1))
@@ -5228,6 +5332,16 @@ func rpc_request_pickup_dismiss(kind: String, cell_x: int, cell_y: int) -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable")
+func rpc_request_use_healing_potion() -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_ph := multiplayer.get_remote_sender_id()
+	if sender_ph == 0:
+		return
+	_server_handle_use_healing_potion(sender_ph)
+
+
+@rpc("any_peer", "call_remote", "reliable")
 func rpc_request_room_trap_undetected_ack(cell_x: int, cell_y: int) -> void:
 	if not multiplayer.is_server():
 		return
@@ -5506,7 +5620,12 @@ func rpc_player_local_stats(
 	level: int,
 	xp_to_next: int,
 	player_alignment: int,
-	npcs_killed: int
+	npcs_killed: int,
+	healing_potion_count: int,
+	armor_class: int,
+	attack_bonus: int,
+	weapon_name: String,
+	weapon_damage_dice: String
 ) -> void:
 	if multiplayer.is_server():
 		return
@@ -5520,7 +5639,12 @@ func rpc_player_local_stats(
 		level,
 		xp_to_next,
 		player_alignment,
-		npcs_killed
+		npcs_killed,
+		healing_potion_count,
+		armor_class,
+		attack_bonus,
+		weapon_name,
+		weapon_damage_dice
 	)
 
 
@@ -5803,6 +5927,7 @@ func _on_server_peer_disconnected(peer_id: int) -> void:
 	_server_xp.erase(peer_id)
 	_server_player_alignment.erase(peer_id)
 	_server_npcs_killed_by_peer.erase(peer_id)
+	_server_healing_potions_by_peer.erase(peer_id)
 	_server_player_hp.erase(peer_id)
 	_server_player_max_hp.erase(peer_id)
 	_server_talent_bonuses_by_peer.erase(peer_id)
