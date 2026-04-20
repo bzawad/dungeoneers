@@ -222,9 +222,5 @@ static func special_feature_payload(
 		+ low
 		+ " catches your eye and seems worth investigating further."
 	)
-	var tail := (
-		"\n\nPlanner tag: **"
-		+ str(info.get("marker", "?"))
-		+ "**. Use **Investigate** on the grid for a deterministic outcome (registry + seed)."
-	)
-	return {"title": "Feature", "message": body + tail}
+	## Explorer `map_template.ex` title + `DescriptionService.get_discovery_fallback(:feature)` body (no dev tail).
+	return {"title": "Something Interesting!", "message": body}

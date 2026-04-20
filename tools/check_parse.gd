@@ -196,9 +196,17 @@ func _init() -> void:
 	var psf: Dictionary = WorldLabelsMsg.special_feature_payload(
 		"special_feature|sf|Altar", "Castle", ""
 	)
+	if str(psf.get("title", "")) != "Something Interesting!":
+		push_error("check_parse: world_labels special_feature title drift")
+		quit(1)
+		return
 	var msf := str(psf.get("message", ""))
 	if not msf.contains("**Altar**") or not msf.contains("intriguing altar"):
 		push_error("check_parse: world_labels feature fallback drift")
+		quit(1)
+		return
+	if msf.contains("Planner tag"):
+		push_error("check_parse: world_labels special_feature should not expose planner tail")
 		quit(1)
 		return
 	var d_closed := WorldLabelsMsg.door_location_fallback_body("closed", "TestTheme", "")

@@ -225,6 +225,8 @@ var _server_special_items_by_peer: Dictionary = {}
 var _server_special_item_dismiss_xp_pending: Dictionary = {}
 ## Server: peer_id -> Dictionary with Vector2i keys — special feature cells investigated this map.
 var _server_investigated_features: Dictionary = {}
+## Server: peer_id -> Dictionary — auto "Something Interesting!" dialog already offered this map (step-once).
+var _server_feature_discovery_prompted: Dictionary = {}
 ## Server: peer awaiting feature-trap damage after first dialog (Explorer trap dialog → `dismiss_trap`).
 var _server_feature_trap_pending: Dictionary = {}
 ## Server: cumulative logical tile overrides vs pristine seed regen (late join + live coalesced `rpc_authority_tile_patch_batch`).
@@ -430,6 +432,7 @@ func configure_authority(
 	_server_special_items_by_peer.clear()
 	_server_special_item_dismiss_xp_pending.clear()
 	_server_investigated_features.clear()
+	_server_feature_discovery_prompted.clear()
 	_server_feature_trap_pending.clear()
 	_server_authority_tile_patches.clear()
 	_live_tile_patch_rpc_pending.clear()
@@ -950,6 +953,59 @@ func client_request_level_up_dismiss() -> void:
 	rpc_request_level_up_dismiss.rpc_id(SERVER_PEER_ID)
 
 
+func is_solo_local_session() -> bool:
+	return _using_solo_local()
+
+
+func client_request_revival() -> void:
+	if _using_solo_local():
+		_server_handle_revival_request(_solo_offline_peer)
+		return
+	if multiplayer.is_server():
+		return
+	if multiplayer.multiplayer_peer == null:
+		return
+	rpc_request_revival.rpc_id(SERVER_PEER_ID)
+
+
+## Explorer `death_new_game` / `generate_new` — solo only (full regen + fresh stats).
+func solo_local_request_new_game() -> void:
+	if not _using_solo_local():
+		return
+	var role := str(_peer_roles.get(_solo_offline_peer, "rogue"))
+	var dn := str(_solo_cached_display_name)
+	var fog_e := _fog_enabled
+	var fog_r := _fog_radius
+	var fog_t := _fog_type
+	var torch_rm := _torch_reveals_moves
+	var theme_norm := _authority_theme
+	if theme_norm != "up" and theme_norm != "down":
+		theme_norm = "up"
+	var new_seed := randi()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = new_seed
+	var result: Dictionary = TraditionalGen.generate(rng, theme_norm)
+	var grid: Dictionary = result["grid"] as Dictionary
+	var checksum := TraditionalGen.grid_checksum(grid)
+	var theme_disp := str(result.get("theme", "")).strip_edges()
+	if theme_disp.is_empty():
+		theme_disp = "Ancient Castle" if theme_norm == "up" else "Dark Caverns"
+	var gen_meta := {
+		"theme_name": theme_disp,
+		"dungeon_level": 1,
+		"player_level": 1,
+		"generation_type": str(result.get("generation_type", "dungeon")),
+		"rooms": result.get("rooms", []),
+		"corridors": result.get("corridors", []),
+		"fog_type": str(result.get("fog_type", "")),
+	}
+	configure_authority(
+		new_seed, theme_norm, checksum, role, grid, fog_e, fog_r, fog_t, torch_rm, gen_meta
+	)
+	begin_solo_local_session(role, dn)
+	print("[Dungeoneers] solo_local_request_new_game seed=", new_seed)
+
+
 func _notify_authority_tile_patch(cell: Vector2i, new_tile: String) -> void:
 	authority_tile_patched.emit(cell, new_tile)
 	if not _using_solo_local() and multiplayer.multiplayer_peer != null and multiplayer.is_server():
@@ -1220,6 +1276,20 @@ func _server_deliver_level_up_dialog(peer_id: int, nl: int, p1: String, p2: Stri
 			rpc_level_up_dialog.rpc_id(peer_id, nl, p1, p2)
 
 
+func _server_handle_revival_request(sender: int) -> void:
+	if not _player_positions.has(sender):
+		return
+	var role_r := str(_peer_roles.get(sender, "rogue"))
+	_server_recompute_max_hp_store(sender)
+	var mx_hp := int(
+		_server_player_max_hp.get(sender, PlayerCombatStats.max_hit_points_for_role(role_r))
+	)
+	_server_player_hp[sender] = mx_hp
+	_server_gold[sender] = 0
+	_emit_stats_for_peer(sender)
+	print("[Dungeoneers] revival_request peer_id=", sender)
+
+
 func _server_handle_client_level_up_dismiss(sender: int) -> void:
 	if not bool(_server_level_up_waiting.get(sender, false)):
 		return
@@ -1302,7 +1372,7 @@ func _pickup_offer_payload(peer_id: int, cell: Vector2i, raw_tile: String) -> Di
 		var fr: Dictionary = ConsumablePickup.food_roll_and_actual(_authority_seed, cell, hp0, mx0)
 		return {
 			"kind": kind,
-			"title": "Food",
+			"title": "Food Found!",
 			"message":
 			ConsumablePickup.food_message(raw_tile, int(fr["roll"]), int(fr["actual"]), hp0, mx0),
 		}
@@ -1310,20 +1380,14 @@ func _pickup_offer_payload(peer_id: int, cell: Vector2i, raw_tile: String) -> Di
 		ConsumablePickup.potion_roll_and_actual(_authority_seed, cell, hp0, mx0)
 		return {
 			"kind": kind,
-			"title": "Healing potion",
+			"title": "Healing Potion Found!",
 			"message": ConsumablePickup.potion_message(),
 		}
 	if kind == "torch_pickup":
 		return {
 			"kind": kind,
-			"title": "Torch",
-			"message":
-			(
-				"You found a torch! It has been added to your inventory.\n\n"
-				+ "Press OK to take it (+"
-				+ str(ConsumablePickup.TORCH_PICKUP_XP)
-				+ " XP when you confirm)."
-			),
+			"title": "Torch Found!",
+			"message": "You found a torch! It has been added to your inventory.",
 		}
 	if kind == "quest_item_pickup":
 		var qid0: String = PlayerQuests.parse_quest_id_from_tile(raw_tile)
@@ -1373,6 +1437,45 @@ func _server_maybe_post_move_pickup(peer_id: int, dst: Vector2i) -> void:
 	print(
 		"[Dungeoneers] post_move_pickup peer_id=", peer_id, " kind=", pack_m["kind"], " cell=", dst
 	)
+
+
+## Explorer `Movement.process_special_feature` on non-pathfinding step — once per cell per map.
+func _server_maybe_post_move_special_feature(
+	peer_id: int, dst: Vector2i, allow_prompt: bool
+) -> void:
+	if not allow_prompt:
+		return
+	if _server_combat_by_peer.has(peer_id):
+		return
+	if not _player_positions.has(peer_id):
+		return
+	if _player_positions[peer_id] != dst:
+		return
+	var raw_sf: String = GridWalk.tile_at(_authority_grid, dst)
+	if not raw_sf.begins_with("special_feature|"):
+		return
+	var rev_sf: Dictionary = _revealed_for_peer(peer_id)
+	if _fog_enabled and not DungeonFog.square_revealed(dst, rev_sf, true):
+		return
+	var dk := _server_investigated_feature_key(dst)
+	var subp: Variant = _server_feature_discovery_prompted.get(peer_id, null)
+	if subp is Dictionary and (subp as Dictionary).get(dk, false) == true:
+		return
+	var eff_sf: String = _authority_effective_tile(dst)
+	var pack_sf: Dictionary = _world_interaction_payload("special_feature", raw_sf, eff_sf, dst)
+	_deliver_world_interaction_to_peer(
+		peer_id,
+		"special_feature",
+		dst,
+		str(pack_sf["title"]),
+		str(pack_sf["message"]),
+	)
+	var subn: Dictionary = {}
+	if subp is Dictionary:
+		subn = (subp as Dictionary).duplicate()
+	subn[dk] = true
+	_server_feature_discovery_prompted[peer_id] = subn
+	print("[Dungeoneers] post_move_special_feature peer_id=", peer_id, " cell=", dst)
 
 
 func _server_handle_pickup_dismiss(sender: int, kind: String, cell: Vector2i) -> void:
@@ -3017,7 +3120,9 @@ func _server_scan_secret_doors_after_move(peer_id: int, new_cell: Vector2i) -> v
 		return
 
 
-func _apply_authorized_move(sender: int, target: Vector2i) -> void:
+func _apply_authorized_move(
+	sender: int, target: Vector2i, allow_post_move_special_feature: bool = true
+) -> void:
 	var revealed: Dictionary = _revealed_for_peer(sender)
 	_player_positions[sender] = target
 	if _fog_enabled:
@@ -3037,6 +3142,7 @@ func _apply_authorized_move(sender: int, target: Vector2i) -> void:
 	_notify_client_player_sync(sender, target)
 	_server_maybe_post_move_traps(sender, target)
 	_server_maybe_post_move_pickup(sender, target)
+	_server_maybe_post_move_special_feature(sender, target, allow_post_move_special_feature)
 	_server_scan_secret_doors_after_move(sender, target)
 	_server_process_monster_turns_after_player(sender)
 	_emit_stats_for_peer(sender)
@@ -3129,6 +3235,9 @@ func _server_process_monster_turns_after_player(mover_peer: int) -> void:
 func _server_try_adjacent_move(sender: int, target: Vector2i) -> bool:
 	if not _player_positions.has(sender):
 		return false
+	if _server_combat_by_peer.has(sender):
+		print("[Dungeoneers] move rejected: in combat peer_id=", sender)
+		return false
 	_server_cancel_pending_path_move(sender)
 	var cur: Vector2i = _player_positions[sender]
 	if not GridWalk.is_king_adjacent(cur, target):
@@ -3161,7 +3270,7 @@ func _server_try_adjacent_move(sender: int, target: Vector2i) -> bool:
 	if _cell_occupied_by_other(sender, target):
 		print("[Dungeoneers] move rejected: cell occupied peer_id=", sender, " target=", target)
 		return false
-	_apply_authorized_move(sender, target)
+	_apply_authorized_move(sender, target, true)
 	return true
 
 
@@ -3184,16 +3293,11 @@ func _server_door_click_valid(sender: int, cell: Vector2i) -> bool:
 
 
 func _world_interaction_encounter_message(effective_tile: String) -> String:
+	## Matches `DungeonWeb.DungeonLive.EncounterSystem.generate_encounter_message/2`.
 	var parts := effective_tile.split("|")
 	var label := parts[1] if parts.size() > 1 else "?"
 	var mname := parts[2] if parts.size() > 2 else "monster"
-	return (
-		"You have an encounter with a "
-		+ mname
-		+ "! ("
-		+ label
-		+ ")\n\nChoose Fight or Evade (server rolls; combat loop is Phase 6)."
-	)
+	return "You have an encounter with a " + mname + "! (" + label + ")"
 
 
 func _world_interaction_map_link_message(raw_tile: String) -> String:
@@ -3239,13 +3343,9 @@ func _world_interaction_payload(
 			title = "Passage"
 			msg = _world_interaction_map_link_message(raw_tile)
 		"treasure":
-			title = "Treasure"
 			var g: int = TreasureSys.gold_for_treasure_cell(_authority_seed, cell)
-			msg = (
-				"You pry open the chest and find "
-				+ str(g)
-				+ " gold coins.\n\nPress OK to take them — you gain the same amount in experience when you confirm."
-			)
+			title = TreasureSys.treasure_discovery_dialog_title()
+			msg = TreasureSys.treasure_discovery_message(g, _authority_theme_name)
 		"room_trap":
 			title = "Trap"
 			msg = WorldLabelsMsg.room_trap_world_interaction_body(
@@ -3323,7 +3423,7 @@ func _world_interaction_encounter_branch(
 		}
 	return {
 		"kind": "encounter",
-		"title": "Encounter",
+		"title": "You have an encounter!",
 		"message": _world_interaction_encounter_message(effective_tile),
 	}
 
@@ -3355,12 +3455,9 @@ func _server_convert_trapped_treasure_to_treasure(cell: Vector2i) -> void:
 
 func _server_offer_plain_treasure_pickup(peer_id: int, cell: Vector2i) -> void:
 	var g2: int = TreasureSys.gold_for_treasure_cell(_authority_seed, cell)
-	var msg_pick := (
-		"You pry open the chest and find "
-		+ str(g2)
-		+ " gold coins.\n\nPress OK to take them — you gain the same amount in experience when you confirm."
-	)
-	_deliver_world_interaction_to_peer(peer_id, "treasure", cell, "Treasure", msg_pick)
+	var title_tr := TreasureSys.treasure_discovery_dialog_title()
+	var msg_pick := TreasureSys.treasure_discovery_message(g2, _authority_theme_name)
+	_deliver_world_interaction_to_peer(peer_id, "treasure", cell, title_tr, msg_pick)
 
 
 func _server_handle_trapped_treasure_interaction(sender: int, cell: Vector2i) -> void:
@@ -4580,8 +4677,9 @@ func _server_path_move_tick(sender: int, serial: int) -> void:
 		print("[Dungeoneers] path move aborted: occupied peer_id=", sender)
 		_server_cancel_pending_path_move(sender)
 		return
+	var step_was_last: bool = arr.size() == 1
 	arr.remove_at(0)
-	_apply_authorized_move(sender, nxt)
+	_apply_authorized_move(sender, nxt, step_was_last)
 	if _server_combat_by_peer.has(sender):
 		_server_cancel_pending_path_move(sender)
 		return
@@ -4608,7 +4706,8 @@ func _server_begin_authorized_path_walk(
 		return
 	var rest: Array[Vector2i] = all_steps.duplicate()
 	var first: Vector2i = rest.pop_front()
-	_apply_authorized_move(sender, first)
+	var single_step_path: bool = all_steps.size() == 1
+	_apply_authorized_move(sender, first, single_step_path)
 	if _server_combat_by_peer.has(sender):
 		_server_cancel_pending_path_move(sender)
 		return
@@ -4629,6 +4728,9 @@ func _server_handle_path_move(sender: int, path: PackedVector2Array) -> void:
 		push_warning("[Dungeoneers] path move rejected: unknown peer_id=", sender)
 		return
 	if path.is_empty():
+		return
+	if _server_combat_by_peer.has(sender):
+		print("[Dungeoneers] path move rejected: in combat peer_id=", sender)
 		return
 	_server_cancel_pending_path_move(sender)
 	var built: Dictionary = _server_validate_path_move_build(sender, path)
@@ -4747,9 +4849,7 @@ func _server_chain_after_trap_survey(
 		var pass_body := WorldLabelsMsg.door_location_fallback_body(
 			"open", _authority_theme_name, _authority_theme
 		)
-		_deliver_door_prompt_to_peer(
-			sender, "pass", cell, lead + pass_body + "\n\nPass through this door?"
-		)
+		_deliver_door_prompt_to_peer(sender, "pass", cell, lead + pass_body)
 	else:
 		push_warning("[Dungeoneers] trap chain: unexpected tile=", t)
 
@@ -4832,9 +4932,7 @@ func _server_handle_door_click(sender: int, cell: Vector2i) -> void:
 		var pass_open := WorldLabelsMsg.door_location_fallback_body(
 			"open", _authority_theme_name, _authority_theme
 		)
-		_deliver_door_prompt_to_peer(
-			sender, "pass", cell, pass_open + "\n\nPass through this door?"
-		)
+		_deliver_door_prompt_to_peer(sender, "pass", cell, pass_open)
 		print("[Dungeoneers] door_click offer pass peer_id=", sender, " cell=", cell)
 		return
 	push_warning("[Dungeoneers] door_click: unexpected tile=", t, " at=", cell)
@@ -5480,6 +5578,16 @@ func rpc_request_level_up_dismiss() -> void:
 	_server_handle_client_level_up_dismiss(sd)
 
 
+@rpc("any_peer", "call_remote", "reliable")
+func rpc_request_revival() -> void:
+	if not multiplayer.is_server():
+		return
+	var sr := multiplayer.get_remote_sender_id()
+	if sr == 0:
+		return
+	_server_handle_revival_request(sr)
+
+
 @rpc("authority", "call_remote", "reliable")
 func rpc_unlocked_doors_delta(cells: PackedVector2Array) -> void:
 	if multiplayer.is_server():
@@ -5683,6 +5791,7 @@ func _on_server_peer_disconnected(peer_id: int) -> void:
 	_server_special_items_by_peer.erase(peer_id)
 	_server_special_item_dismiss_xp_pending.erase(peer_id)
 	_server_feature_trap_pending.erase(peer_id)
+	_server_feature_discovery_prompted.erase(peer_id)
 	_server_investigated_features.erase(peer_id)
 	_server_rumor_xp_pending.erase(peer_id)
 	_server_combat_by_peer.erase(peer_id)

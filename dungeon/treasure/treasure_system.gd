@@ -25,6 +25,21 @@ static func gold_for_treasure_cell(authority_seed: int, cell: Vector2i) -> int:
 	return roll_gold_3d10(rng)
 
 
+## Explorer `map_template.ex` title + `DescriptionService.get_discovery_fallback(:treasure)` body (static port).
+static func treasure_discovery_dialog_title() -> String:
+	return "Treasure Found!"
+
+
+static func treasure_discovery_message(gold_amount: int, theme_display_name: String) -> String:
+	var theme := (
+		theme_display_name if not theme_display_name.strip_edges().is_empty() else "dungeon"
+	)
+	return (
+		"A collection of valuable coins and trinkets worth %d gold, gleaming in the dim light of this %s."
+		% [gold_amount, theme]
+	)
+
+
 ## After pickup: Explorer `determine_underlying_tile/2` (room → floor, else corridor).
 static func underlying_tile_after_collect(cell: Vector2i, rooms: Array) -> String:
 	if rooms.is_empty():

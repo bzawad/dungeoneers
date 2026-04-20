@@ -20,7 +20,8 @@ Authoritative Explorer sources: [`dialog_component.ex`](../../dungeon_explorer/l
 
 | Modal family | Explorer reference | Dungeoneers |
 |--------------|---------------------|-------------|
-| **Doors** | Unlock `gray`; open door `green`; trap flows red/yellow/green via state | `_ensure_door_prompt_window` / `_apply_door_window_chrome` |
+| **Doors** | Unlock `gray`; open door `green`; trap flows red/yellow/green via state | `_ensure_door_prompt_window` / `_apply_door_window_chrome` — custom `Window` with Explorer-style header (icon + title), body scroll (fixed max height, no vertical expand so footer is not clipped); **open door**: **Enter** + **Cancel**; **unlock**: **Pick Lock** (`lockpicks.png`, `primary`) + **Cancel** (`cancel.png`, `secondary`); **break door**: **Break door** + **Cancel**; other flows use a single **OK**. |
+| **Location / labels** | `title="Location Info"`, `green`, **Continue** = `success` | `_ensure_label_location_window` / `_apply_label_location_window_chrome` — custom `Window` (not `AcceptDialog`); header icon from tile kind (`room.png`, `corridor.png`, `magnifying_glass.png`, `castle.png`); body centered. |
 | **Combat** | `color_scheme="red"`, `max_width={false}`, `scrollable={false}` | `_ensure_combat_window` / `_apply_combat_window_chrome` |
 | **Treasure** (resolution) | Treasure dialog `green` | `_on_encounter_resolution_dialog` title `"Treasure found"` → `apply_accept_dialog_scheme` |
 | **Rumors** | Rumor dialog `gray`; list overlay gray border | List: `_apply_rumors_list_window_chrome`; detail: `AcceptDialog` via encounter resolution |

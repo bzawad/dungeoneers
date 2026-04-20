@@ -353,6 +353,7 @@ class InteractiveCombatSession:
 	var m_dice: String = "1d4"
 	var m_weapon: String = "Attack"
 	var player_hp: int = 0
+	var player_max_hp: int = 4
 	var player_ac: int = 10
 	var atk_b: int = 0
 	var wpn: String = ""
@@ -415,17 +416,34 @@ class InteractiveCombatSession:
 			+ ". Monster goes first!"
 		)
 
+	func _log_recent_four() -> Array:
+		var out: Array = []
+		var n: int = log_lines.size()
+		var start: int = maxi(0, n - 4)
+		for i in range(start, n):
+			out.append(str(log_lines[i]))
+		return out
+
 	func _snapshot() -> Dictionary:
 		var sfx_arr: Array = []
 		for i in range(_sfx_events.size()):
 			sfx_arr.append(_sfx_events[i])
+		var mon_img: String = str(mon.get("image", "")).strip_edges()
 		return {
 			"title": _title_for_ui(),
 			"log_full": _lines_to_body_local(log_lines),
+			"log_recent_four": _log_recent_four(),
 			"player_hp": player_hp,
+			"player_max_hp": player_max_hp,
 			"monster_hp": monster_hp,
 			"monster_max_hp": monster_max_hp,
 			"monster_display": disp_name,
+			"player_weapon": wpn,
+			"player_damage_dice": w_dice,
+			"monster_weapon": m_weapon,
+			"monster_damage_dice": m_dice,
+			"monster_image": mon_img,
+			"monster_surprised": surprise_attack_available and awaiting_surprise_action,
 			"awaiting_player": awaiting_player and not finished,
 			"can_attack":
 			(
@@ -489,6 +507,7 @@ class InteractiveCombatSession:
 			if not wd.is_empty():
 				pst["weapon_damage_dice"] = wd
 		var cap: int = int(pst.get("max_hit_points", _PlayerCombatStats.BASE_MAX_HIT_POINTS))
+		player_max_hp = cap
 		player_hp = clampi(start_player_hp, 0, cap)
 		player_ac = int(pst.get("armor_class", _PlayerCombatStats.BASE_ARMOR_CLASS))
 		atk_b = int(pst.get("attack_bonus", _PlayerCombatStats.BASE_ATTACK_BONUS))

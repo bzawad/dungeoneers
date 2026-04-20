@@ -14,6 +14,10 @@ const JoinMetadata := preload("res://dungeon/network/join_metadata.gd")
 const RumorsListMessages := preload("res://dungeon/ui/rumors_list_messages.gd")
 const ExplorerAudioScript := preload("res://dungeon/audio/explorer_audio.gd")
 const ExplorerModalChrome := preload("res://dungeon/ui/explorer_modal_chrome.gd")
+const PartyMarkerArt := preload("res://dungeon/ui/party_marker_art.gd")
+const EncounterMapToken := preload("res://dungeon/ui/encounter_map_token.gd")
+
+const _EXPLORER_IMG_DIR := "res://assets/explorer/images/"
 
 var last_seed: int = 0
 var _path_grid: Dictionary = {}
@@ -23,6 +27,7 @@ var _client_revealed: Dictionary = {}
 var _client_unlocked: Dictionary = {}
 var _client_fog_clicked: Dictionary = {}
 var _welcome_fog_on: bool = false
+var _welcome_fog_type: String = "dim"
 var _net_rep: Node = null
 var _grid_view: Node2D = null
 
@@ -33,13 +38,32 @@ var _door_ok_button: Button = null
 var _door_break_row: HBoxContainer = null
 var _door_break_btn: Button = null
 var _door_cancel_btn: Button = null
+var _door_title_label: Label = null
+var _door_pass_row: HBoxContainer = null
+var _door_enter_btn: Button = null
+var _door_pass_cancel_btn: Button = null
+var _door_unlock_row: HBoxContainer = null
+var _door_pick_lock_btn: Button = null
+var _door_unlock_cancel_btn: Button = null
+var _label_location_window: Window = null
+var _label_location_icon: TextureRect = null
+var _label_location_title_lbl: Label = null
+var _label_location_body: Label = null
+var _label_location_continue_btn: Button = null
 var _pending_door_action: String = ""
 var _pending_door_cell: Vector2i = Vector2i.ZERO
 var _trap_defused: Dictionary = {}
 var _world_dialog: AcceptDialog = null
 var _pending_world_kind: String = ""
 var _pending_world_cell: Vector2i = Vector2i.ZERO
+var _treasure_discovery_window: Window = null
+var _treasure_discovery_icon: TextureRect = null
+var _treasure_discovery_title_lbl: Label = null
+var _treasure_discovery_body: Label = null
+var _treasure_discovery_collect_btn: Button = null
 var _special_feature_window: Window = null
+var _special_feature_header_icon: TextureRect = null
+var _special_feature_title_lbl: Label = null
 var _special_feature_message_label: Label = null
 var _special_feature_investigate_btn: Button = null
 var _special_feature_close_btn: Button = null
@@ -77,6 +101,8 @@ var _achievements_list_hint: Label = null
 var _achievements_view_btn: Button = null
 var _achievements_close_btn: Button = null
 var _encounter_window: Window = null
+var _encounter_header_icon: TextureRect = null
+var _encounter_title_label: Label = null
 var _encounter_message_label: Label = null
 var _encounter_fight_btn: Button = null
 var _encounter_evade_btn: Button = null
@@ -90,10 +116,24 @@ var _encounter_res_dialog: AcceptDialog = null
 var _level_up_dialog: AcceptDialog = null
 var _combat_window: Window = null
 var _combat_title_label: Label = null
+var _combat_surprise_label: Label = null
+var _combat_vs_container: HBoxContainer = null
+var _combat_player_tex: TextureRect = null
+var _combat_monster_tex: TextureRect = null
+var _combat_player_hp_lbl: Label = null
+var _combat_player_wpn_lbl: Label = null
+var _combat_player_dice_lbl: Label = null
+var _combat_monster_name_lbl: Label = null
+var _combat_monster_hp_lbl: Label = null
+var _combat_monster_wpn_lbl: Label = null
+var _combat_monster_dice_lbl: Label = null
+var _combat_log_scroll: ScrollContainer = null
+var _combat_events_vbox: VBoxContainer = null
 var _combat_log_label: Label = null
-var _combat_hp_label: Label = null
 var _combat_attack_btn: Button = null
 var _combat_flee_btn: Button = null
+var _combat_btn_row: HBoxContainer = null
+var _combat_last_snapshot: Dictionary = {}
 var _combat_finish_timer: Variant = null
 ## Last encounter cell for Fight / Evade (Evade fail must start combat like Explorer `handle_failed_encounter_evade`).
 var _last_encounter_fight_cell: Vector2i = Vector2i.ZERO
@@ -103,6 +143,18 @@ var _combat_finish_body: String = ""
 var _combat_finish_victory: bool = false
 var _combat_finish_flee_success: bool = false
 var _combat_finish_treasure: int = 0
+var _victory_window: Window = null
+var _victory_body_label: Label = null
+var _victory_action_btn: Button = null
+var _death_window: Window = null
+var _death_flavor_label: Label = null
+var _death_score_label: Label = null
+var _death_continue_btn: Button = null
+var _death_new_game_btn: Button = null
+var _death_trap_flavor: String = ""
+var _revival_window: Window = null
+var _revival_body_label: Label = null
+var _revival_ok_btn: Button = null
 var _cb_net_player_pos: Callable
 var _cb_net_fog_delta: Callable
 var _cb_net_fog_full: Callable
@@ -211,7 +263,8 @@ func start_local(authority_seed: int, theme_direction: String) -> void:
 		str(result.get("shrub_theme", ""))
 	)
 	view.set_view_center_from_cell(DungeonGridView.find_starting_cell_for_camera(result["grid"]))
-	view.configure_fog(false, {}, str(result.get("fog_type", "dim")))
+	_welcome_fog_type = str(result.get("fog_type", "dim"))
+	view.configure_fog(false, {}, _welcome_fog_type)
 	_ensure_stats_hud()
 	_refresh_stats_hud_text()
 
@@ -246,6 +299,7 @@ func start_from_grid(
 		_net_rep = net_rep
 		_net_local_cell = Vector2i(int(welcome.get("spawn_x", 0)), int(welcome.get("spawn_y", 0)))
 		_welcome_fog_on = bool(welcome.get("fog_enabled", true))
+		_welcome_fog_type = str(welcome.get("fog_type", "dim"))
 		_client_revealed.clear()
 		_client_unlocked.clear()
 		_client_fog_clicked.clear()
@@ -254,11 +308,10 @@ func start_from_grid(
 			var r_rooms: Array = []
 			if welcome.get("rooms", []) is Array:
 				r_rooms = welcome.get("rooms", []) as Array
-			var ft0 := str(welcome.get("fog_type", "dim"))
 			DungeonFog.seed_initial_revealed_with_light(
-				_client_revealed, grid, _net_local_cell, r_rooms, ft0
+				_client_revealed, grid, _net_local_cell, r_rooms, _welcome_fog_type
 			)
-		view.configure_fog(_welcome_fog_on, _client_revealed, str(welcome.get("fog_type", "dim")))
+		view.configure_fog(_welcome_fog_on, _client_revealed, _welcome_fog_type)
 		view.init_network_markers(local_peer_id)
 		view.set_view_center_from_cell(_net_local_cell)
 		_apply_display_name_from_welcome(welcome)
@@ -337,6 +390,7 @@ func reload_from_authority(grid: Dictionary, seed_for_log: int, welcome: Diction
 	if _net_rep == null or _local_peer_id < 0:
 		return
 	_clear_combat_finish_timer()
+	_hide_victory_death_revival_windows()
 	if _rumors_list_window != null and _rumors_list_window.visible:
 		_rumors_list_window.hide()
 		_set_grid_hover_polish_for_modal(false)
@@ -376,6 +430,7 @@ func reload_from_authority(grid: Dictionary, seed_for_log: int, welcome: Diction
 	_path_grid = grid
 	_net_local_cell = Vector2i(int(welcome.get("spawn_x", 0)), int(welcome.get("spawn_y", 0)))
 	_welcome_fog_on = bool(welcome.get("fog_enabled", true))
+	_welcome_fog_type = str(welcome.get("fog_type", "dim"))
 	_client_revealed.clear()
 	_client_unlocked.clear()
 	_client_fog_clicked.clear()
@@ -384,9 +439,8 @@ func reload_from_authority(grid: Dictionary, seed_for_log: int, welcome: Diction
 		var r_rooms2: Array = []
 		if welcome.get("rooms", []) is Array:
 			r_rooms2 = welcome.get("rooms", []) as Array
-		var ft1 := str(welcome.get("fog_type", "dim"))
 		DungeonFog.seed_initial_revealed_with_light(
-			_client_revealed, grid, _net_local_cell, r_rooms2, ft1
+			_client_revealed, grid, _net_local_cell, r_rooms2, _welcome_fog_type
 		)
 	if _grid_view != null:
 		_grid_view.queue_free()
@@ -407,7 +461,7 @@ func reload_from_authority(grid: Dictionary, seed_for_log: int, welcome: Diction
 		str(welcome.get("road_theme", "")),
 		str(welcome.get("shrub_theme", ""))
 	)
-	view.configure_fog(_welcome_fog_on, _client_revealed, str(welcome.get("fog_type", "dim")))
+	view.configure_fog(_welcome_fog_on, _client_revealed, _welcome_fog_type)
 	view.init_network_markers(_local_peer_id)
 	view.set_view_center_from_cell(_net_local_cell)
 	_apply_display_name_from_welcome(welcome)
@@ -475,7 +529,7 @@ func _ensure_door_prompt_window() -> void:
 	_door_window = Window.new()
 	_door_window.name = "DoorPromptWindow"
 	_door_window.title = "Door"
-	_door_window.size = Vector2i(520, 320)
+	_door_window.size = Vector2i(520, 460)
 	_door_window.popup_window = true
 	_door_window.unresizable = true
 	_door_window.transient = true
@@ -494,35 +548,76 @@ func _ensure_door_prompt_window() -> void:
 
 	var vb := VBoxContainer.new()
 	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb.add_theme_constant_override(&"separation", 12)
 	margin.add_child(vb)
 
-	var hb := HBoxContainer.new()
-	hb.add_theme_constant_override("separation", 12)
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override(&"separation", 12)
 	var door_icon_rect := TextureRect.new()
 	door_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	door_icon_rect.custom_minimum_size = Vector2(56, 56)
+	door_icon_rect.custom_minimum_size = Vector2(48, 48)
+	door_icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	var lock_tex := DungeonTileAssets.load_lock_icon_texture()
 	if lock_tex != null:
 		door_icon_rect.texture = lock_tex
-	hb.add_child(door_icon_rect)
+	header.add_child(door_icon_rect)
 	_door_prompt_icon = door_icon_rect
+	_door_title_label = Label.new()
+	_door_title_label.text = "Door"
+	_door_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(_door_title_label)
+	vb.add_child(header)
 
 	var door_msg_scroll := ScrollContainer.new()
 	door_msg_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	door_msg_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	door_msg_scroll.custom_minimum_size = Vector2(120, ExplorerModalChrome.SCROLL_BODY_MAX_PX)
+	## Do not expand vertically: label autowrap makes content min-height huge and would clip footer buttons.
+	door_msg_scroll.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	door_msg_scroll.custom_minimum_size = Vector2(0, ExplorerModalChrome.SCROLL_BODY_MAX_PX)
+	vb.add_child(door_msg_scroll)
 	_door_message = Label.new()
 	_door_message.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_door_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_door_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	door_msg_scroll.add_child(_door_message)
-	hb.add_child(door_msg_scroll)
-	vb.add_child(hb)
 
-	_door_ok_button = Button.new()
-	_door_ok_button.text = "OK"
-	_door_ok_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_door_ok_button.pressed.connect(_on_door_ok_pressed)
-	vb.add_child(_door_ok_button)
+	_door_pass_row = HBoxContainer.new()
+	_door_pass_row.visible = false
+	_door_pass_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_door_pass_row.add_theme_constant_override(&"separation", 16)
+	_door_enter_btn = Button.new()
+	_door_enter_btn.text = "Enter"
+	var dw_tex := _explorer_img_texture("doorway.png")
+	if dw_tex != null:
+		_door_enter_btn.icon = dw_tex
+	_door_enter_btn.pressed.connect(_on_door_ok_pressed)
+	_door_pass_row.add_child(_door_enter_btn)
+	_door_pass_cancel_btn = Button.new()
+	_door_pass_cancel_btn.text = "Cancel"
+	var cn_tex := _explorer_img_texture("cancel.png")
+	if cn_tex != null:
+		_door_pass_cancel_btn.icon = cn_tex
+	_door_pass_cancel_btn.pressed.connect(_on_door_cancel_pressed)
+	_door_pass_row.add_child(_door_pass_cancel_btn)
+	vb.add_child(_door_pass_row)
+
+	_door_unlock_row = HBoxContainer.new()
+	_door_unlock_row.visible = false
+	_door_unlock_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_door_unlock_row.add_theme_constant_override(&"separation", 16)
+	_door_pick_lock_btn = Button.new()
+	_door_pick_lock_btn.text = "Pick Lock"
+	var lp_tex := _explorer_img_texture("lockpicks.png")
+	if lp_tex != null:
+		_door_pick_lock_btn.icon = lp_tex
+	_door_pick_lock_btn.pressed.connect(_on_door_ok_pressed)
+	_door_unlock_row.add_child(_door_pick_lock_btn)
+	_door_unlock_cancel_btn = Button.new()
+	_door_unlock_cancel_btn.text = "Cancel"
+	if cn_tex != null:
+		_door_unlock_cancel_btn.icon = cn_tex
+	_door_unlock_cancel_btn.pressed.connect(_on_door_cancel_pressed)
+	_door_unlock_row.add_child(_door_unlock_cancel_btn)
+	vb.add_child(_door_unlock_row)
 
 	_door_break_row = HBoxContainer.new()
 	_door_break_row.visible = false
@@ -534,9 +629,17 @@ func _ensure_door_prompt_window() -> void:
 	_door_break_row.add_child(_door_break_btn)
 	_door_cancel_btn = Button.new()
 	_door_cancel_btn.text = "Cancel"
+	if cn_tex != null:
+		_door_cancel_btn.icon = cn_tex
 	_door_cancel_btn.pressed.connect(_on_door_cancel_pressed)
 	_door_break_row.add_child(_door_cancel_btn)
 	vb.add_child(_door_break_row)
+
+	_door_ok_button = Button.new()
+	_door_ok_button.text = "OK"
+	_door_ok_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_door_ok_button.pressed.connect(_on_door_ok_pressed)
+	vb.add_child(_door_ok_button)
 
 
 func _ensure_encounter_choice_window() -> void:
@@ -544,8 +647,8 @@ func _ensure_encounter_choice_window() -> void:
 		return
 	_encounter_window = Window.new()
 	_encounter_window.name = "EncounterChoiceWindow"
-	_encounter_window.title = "Encounter"
-	_encounter_window.size = Vector2i(520, 240)
+	_encounter_window.title = "You have an encounter!"
+	_encounter_window.size = Vector2i(520, 280)
 	_encounter_window.popup_window = true
 	_encounter_window.unresizable = true
 	_encounter_window.transient = true
@@ -564,23 +667,45 @@ func _ensure_encounter_choice_window() -> void:
 
 	var vb := VBoxContainer.new()
 	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb.add_theme_constant_override(&"separation", 12)
 	margin.add_child(vb)
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override(&"separation", 12)
+	_encounter_header_icon = TextureRect.new()
+	_encounter_header_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_encounter_header_icon.custom_minimum_size = Vector2(48, 48)
+	_encounter_header_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	header.add_child(_encounter_header_icon)
+	_encounter_title_label = Label.new()
+	_encounter_title_label.text = "You have an encounter!"
+	_encounter_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(_encounter_title_label)
+	vb.add_child(header)
 
 	_encounter_message_label = Label.new()
 	_encounter_message_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_encounter_message_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_encounter_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_encounter_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_encounter_message_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	vb.add_child(_encounter_message_label)
 
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 16)
 	_encounter_fight_btn = Button.new()
-	_encounter_fight_btn.text = "Fight"
+	_encounter_fight_btn.text = "Fight!"
+	var sw_tex := _explorer_img_texture("swords.png")
+	if sw_tex != null:
+		_encounter_fight_btn.icon = sw_tex
 	_encounter_fight_btn.pressed.connect(_on_encounter_fight_pressed)
 	row.add_child(_encounter_fight_btn)
 	_encounter_evade_btn = Button.new()
 	_encounter_evade_btn.text = "Evade"
+	var ev_tex := _explorer_img_texture("evade.png")
+	if ev_tex != null:
+		_encounter_evade_btn.icon = ev_tex
 	_encounter_evade_btn.pressed.connect(_on_encounter_evade_pressed)
 	row.add_child(_encounter_evade_btn)
 	vb.add_child(row)
@@ -592,12 +717,18 @@ func _apply_encounter_choice_window_chrome() -> void:
 	if _encounter_window == null:
 		return
 	ExplorerModalChrome.style_window_panel(_encounter_window, "yellow")
+	if _encounter_title_label != null:
+		ExplorerModalChrome.style_title_label(_encounter_title_label, "yellow")
 	if _encounter_message_label != null:
 		ExplorerModalChrome.style_body_label(_encounter_message_label, "yellow")
 	if _encounter_fight_btn != null:
 		ExplorerModalChrome.style_button(_encounter_fight_btn, "warning", false)
 	if _encounter_evade_btn != null:
 		ExplorerModalChrome.style_button(_encounter_evade_btn, "secondary", false)
+	if _encounter_fight_btn != null:
+		ExplorerModalChrome.tighten_button_for_modal_icon_row(_encounter_fight_btn)
+	if _encounter_evade_btn != null:
+		ExplorerModalChrome.tighten_button_for_modal_icon_row(_encounter_evade_btn)
 
 
 func _ensure_npc_quest_offer_window() -> void:
@@ -778,8 +909,10 @@ func _on_encounter_evade_pressed() -> void:
 
 
 func _on_encounter_resolution_dialog(title: String, message: String) -> void:
-	if title != "Victory":
-		_pending_victory_treasure_gold = 0
+	_pending_victory_treasure_gold = 0
+	if title == "Death":
+		_show_death_dialog(message)
+		return
 	_ensure_encounter_resolution_dialog()
 	_encounter_res_dialog.title = title
 	_encounter_res_dialog.dialog_text = message
@@ -829,13 +962,6 @@ func _on_encounter_res_confirmed() -> void:
 		var fc := _last_encounter_fight_cell
 		if fc != Vector2i.ZERO:
 			_net_rep.client_request_encounter_fight(fc.x, fc.y)
-	if dlg_title == "Victory":
-		if _pending_victory_treasure_gold > 0:
-			_explorer_audio().play_coins()
-		_explorer_audio().resume_wander_after_combat(last_seed)
-	elif dlg_title == "Defeat":
-		_explorer_audio().stop_death_music()
-		_explorer_audio().resume_wander_after_combat(last_seed)
 	_pending_victory_treasure_gold = 0
 
 
@@ -868,10 +994,478 @@ func _on_encounter_res_canceled() -> void:
 		var fc2 := _last_encounter_fight_cell
 		if fc2 != Vector2i.ZERO:
 			_net_rep.client_request_encounter_fight(fc2.x, fc2.y)
-	if dlg_title2 == "Defeat":
-		_explorer_audio().stop_death_music()
-		_explorer_audio().resume_wander_after_combat(last_seed)
 	_pending_victory_treasure_gold = 0
+
+
+func _explorer_img_texture(basename: String) -> Texture2D:
+	var path := _EXPLORER_IMG_DIR.path_join(basename)
+	if ResourceLoader.exists(path):
+		return load(path) as Texture2D
+	return null
+
+
+func _explorer_label_icon_texture(kind: String) -> Texture2D:
+	match kind:
+		"room_label":
+			return _explorer_img_texture("room.png")
+		"corridor_label":
+			return _explorer_img_texture("corridor.png")
+		"area_label":
+			return _explorer_img_texture("magnifying_glass.png")
+		"building_label":
+			return _explorer_img_texture("castle.png")
+		_:
+			return null
+
+
+func _hide_victory_death_revival_windows() -> void:
+	if _victory_window != null and _victory_window.visible:
+		_victory_window.hide()
+	if _death_window != null and _death_window.visible:
+		_death_window.hide()
+	if _revival_window != null and _revival_window.visible:
+		_revival_window.hide()
+	_set_grid_hover_polish_for_modal(false)
+
+
+func _ensure_victory_window() -> void:
+	if _victory_window != null:
+		return
+	_victory_window = Window.new()
+	_victory_window.name = "VictoryWindow"
+	_victory_window.title = "Victory!"
+	_victory_window.size = Vector2i(480, 300)
+	_victory_window.popup_window = true
+	_victory_window.unresizable = true
+	_victory_window.transient = true
+	_victory_window.exclusive = true
+	_victory_window.visible = false
+	_victory_window.close_requested.connect(_on_victory_window_close_requested)
+	add_child(_victory_window)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override(&"margin_left", 14)
+	margin.add_theme_constant_override(&"margin_right", 14)
+	margin.add_theme_constant_override(&"margin_top", 12)
+	margin.add_theme_constant_override(&"margin_bottom", 12)
+	_victory_window.add_child(margin)
+	var vb := VBoxContainer.new()
+	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb.add_theme_constant_override(&"separation", 12)
+	margin.add_child(vb)
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override(&"separation", 12)
+	var vic_icon := TextureRect.new()
+	vic_icon.custom_minimum_size = Vector2(48, 48)
+	vic_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	vic_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var vt := _explorer_img_texture("victory.png")
+	if vt != null:
+		vic_icon.texture = vt
+	hb.add_child(vic_icon)
+	var title_lbl := Label.new()
+	title_lbl.text = "Victory!"
+	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ExplorerModalChrome.style_title_label(title_lbl, "green")
+	hb.add_child(title_lbl)
+	vb.add_child(hb)
+	_victory_body_label = Label.new()
+	_victory_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_victory_body_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ExplorerModalChrome.style_body_label(_victory_body_label, "green")
+	vb.add_child(_victory_body_label)
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_victory_action_btn = Button.new()
+	_victory_action_btn.pressed.connect(_on_victory_action_pressed)
+	btn_row.add_child(_victory_action_btn)
+	vb.add_child(btn_row)
+
+
+func _on_victory_window_close_requested() -> void:
+	_on_victory_action_pressed()
+
+
+func _on_victory_action_pressed() -> void:
+	if _victory_window != null:
+		_victory_window.hide()
+	_set_grid_hover_polish_for_modal(false)
+	if _pending_victory_treasure_gold > 0:
+		_explorer_audio().play_coins()
+	_explorer_audio().resume_wander_after_combat(last_seed)
+	_pending_victory_treasure_gold = 0
+
+
+func _show_victory_after_combat() -> void:
+	_ensure_victory_window()
+	var tg := _combat_finish_treasure
+	if tg > 0:
+		_victory_body_label.text = (
+			"You have defeated the monster!\n\nYou find %d gold pieces in the aftermath of the battle."
+			% tg
+		)
+		_victory_action_btn.text = "  Collect Treasure  "
+		var gtx := _explorer_img_texture("gold.png")
+		if gtx != null:
+			_victory_action_btn.icon = gtx
+	else:
+		_victory_body_label.text = ("You have defeated the monster!\n\nYou search the area but find no treasure.")
+		_victory_action_btn.text = "Continue"
+		_victory_action_btn.icon = null
+	ExplorerModalChrome.style_button(_victory_action_btn, "success", false)
+	ExplorerModalChrome.tighten_button_for_modal_icon_row(_victory_action_btn)
+	ExplorerModalChrome.style_window_panel(_victory_window, "green")
+	var margin_v := _victory_window.get_child(0) as MarginContainer
+	var vb_v := margin_v.get_child(0) as VBoxContainer
+	var row_v := vb_v.get_child(0) as HBoxContainer
+	if row_v.get_child_count() > 1:
+		ExplorerModalChrome.style_title_label(row_v.get_child(1) as Label, "green")
+	ExplorerModalChrome.style_body_label(_victory_body_label, "green")
+	_victory_window.popup_centered()
+	_set_grid_hover_polish_for_modal(true)
+
+
+func _ensure_death_window() -> void:
+	if _death_window != null:
+		return
+	_death_window = Window.new()
+	_death_window.name = "DeathWindow"
+	_death_window.title = "You Have Died"
+	_death_window.size = Vector2i(580, 440)
+	_death_window.popup_window = true
+	_death_window.unresizable = true
+	_death_window.transient = true
+	_death_window.exclusive = true
+	_death_window.visible = false
+	_death_window.close_requested.connect(_on_death_window_close_requested)
+	add_child(_death_window)
+	var margin_d := MarginContainer.new()
+	margin_d.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin_d.add_theme_constant_override(&"margin_left", 14)
+	margin_d.add_theme_constant_override(&"margin_right", 14)
+	margin_d.add_theme_constant_override(&"margin_top", 12)
+	margin_d.add_theme_constant_override(&"margin_bottom", 12)
+	_death_window.add_child(margin_d)
+	var vb_d := VBoxContainer.new()
+	vb_d.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb_d.add_theme_constant_override(&"separation", 10)
+	margin_d.add_child(vb_d)
+	var hb_head := HBoxContainer.new()
+	hb_head.add_theme_constant_override(&"separation", 12)
+	var trap_icon := TextureRect.new()
+	trap_icon.custom_minimum_size = Vector2(64, 64)
+	trap_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	trap_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var tt := _explorer_img_texture("trap.png")
+	if tt != null:
+		trap_icon.texture = tt
+	hb_head.add_child(trap_icon)
+	var death_title := Label.new()
+	death_title.text = "You Have Died"
+	death_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ExplorerModalChrome.style_title_label(death_title, "red")
+	hb_head.add_child(death_title)
+	vb_d.add_child(hb_head)
+	var l1 := Label.new()
+	l1.text = "Your Hit Points have reached 0"
+	l1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ExplorerModalChrome.style_body_label(l1, "red")
+	vb_d.add_child(l1)
+	var l2 := Label.new()
+	l2.text = "Your adventuring days have come to an end..."
+	l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ExplorerModalChrome.style_body_label(l2, "red")
+	vb_d.add_child(l2)
+	_death_flavor_label = Label.new()
+	_death_flavor_label.visible = false
+	_death_flavor_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_death_flavor_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ExplorerModalChrome.style_body_label(_death_flavor_label, "red")
+	vb_d.add_child(_death_flavor_label)
+	var score_panel := PanelContainer.new()
+	var score_sb := StyleBoxFlat.new()
+	score_sb.bg_color = Color8(0x1F, 0x29, 0x37)
+	score_sb.set_corner_radius_all(8)
+	score_sb.set_content_margin_all(12)
+	score_panel.add_theme_stylebox_override(&"panel", score_sb)
+	var score_h := HBoxContainer.new()
+	score_h.alignment = BoxContainer.ALIGNMENT_CENTER
+	score_h.add_theme_constant_override(&"separation", 10)
+	var xp_ic := TextureRect.new()
+	xp_ic.custom_minimum_size = Vector2(24, 24)
+	xp_ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	xp_ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var xpt := _explorer_img_texture("xp.png")
+	if xpt != null:
+		xp_ic.texture = xpt
+	score_h.add_child(xp_ic)
+	_death_score_label = Label.new()
+	_death_score_label.add_theme_font_size_override(&"font_size", 18)
+	_death_score_label.add_theme_color_override(&"font_color", Color8(0xC0, 0x8C, 0xFC))
+	score_h.add_child(_death_score_label)
+	score_panel.add_child(score_h)
+	vb_d.add_child(score_panel)
+	var l4 := Label.new()
+	l4.text = "Choose how you wish to proceed:"
+	l4.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l4.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ExplorerModalChrome.style_body_label(l4, "red")
+	vb_d.add_child(l4)
+	var btn_row_d := HBoxContainer.new()
+	btn_row_d.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row_d.add_theme_constant_override(&"separation", 16)
+	_death_continue_btn = Button.new()
+	_death_continue_btn.text = "Continue"
+	_death_continue_btn.pressed.connect(_on_death_continue_pressed)
+	btn_row_d.add_child(_death_continue_btn)
+	_death_new_game_btn = Button.new()
+	_death_new_game_btn.text = "  New Game  "
+	var rtx := _explorer_img_texture("reset.png")
+	if rtx != null:
+		_death_new_game_btn.icon = rtx
+	_death_new_game_btn.pressed.connect(_on_death_new_game_pressed)
+	btn_row_d.add_child(_death_new_game_btn)
+	vb_d.add_child(btn_row_d)
+
+
+func _on_death_window_close_requested() -> void:
+	pass
+
+
+func _show_death_dialog(trap_flavor: String) -> void:
+	_ensure_death_window()
+	_death_trap_flavor = trap_flavor.strip_edges()
+	if _death_trap_flavor.is_empty():
+		_death_flavor_label.visible = false
+	else:
+		_death_flavor_label.text = _death_trap_flavor
+		_death_flavor_label.visible = true
+	_death_score_label.text = "Final Score: %d XP" % _last_xp
+	ExplorerModalChrome.style_button(_death_continue_btn, "secondary", false)
+	ExplorerModalChrome.style_button(_death_new_game_btn, "primary", false)
+	ExplorerModalChrome.tighten_button_for_modal_icon_row(_death_continue_btn)
+	ExplorerModalChrome.tighten_button_for_modal_icon_row(_death_new_game_btn)
+	var solo_ng := _net_rep != null and _net_rep.has_method("is_solo_local_session")
+	if solo_ng and bool(_net_rep.call("is_solo_local_session")):
+		_death_new_game_btn.visible = true
+		_death_new_game_btn.disabled = false
+	else:
+		_death_new_game_btn.visible = false
+	ExplorerModalChrome.style_window_panel(_death_window, "red")
+	_explorer_audio().play_death_sting()
+	_explorer_audio().start_death_music()
+	_death_window.popup_centered()
+	_set_grid_hover_polish_for_modal(true)
+
+
+func _on_death_continue_pressed() -> void:
+	_explorer_audio().play_click()
+	if _death_window != null:
+		_death_window.hide()
+	_set_grid_hover_polish_for_modal(false)
+	_show_revival_dialog()
+
+
+func _on_death_new_game_pressed() -> void:
+	_explorer_audio().play_click()
+	if _death_window != null:
+		_death_window.hide()
+	_set_grid_hover_polish_for_modal(false)
+	_explorer_audio().stop_death_music()
+	if _net_rep != null and _net_rep.has_method("solo_local_request_new_game"):
+		_net_rep.solo_local_request_new_game()
+
+
+func _ensure_revival_window() -> void:
+	if _revival_window != null:
+		return
+	_revival_window = Window.new()
+	_revival_window.name = "RevivalWindow"
+	_revival_window.title = "You're Alive!"
+	_revival_window.size = Vector2i(500, 320)
+	_revival_window.popup_window = true
+	_revival_window.unresizable = true
+	_revival_window.transient = true
+	_revival_window.exclusive = true
+	_revival_window.visible = false
+	_revival_window.close_requested.connect(_on_revival_window_close_requested)
+	add_child(_revival_window)
+	var m2 := MarginContainer.new()
+	m2.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	m2.add_theme_constant_override(&"margin_left", 14)
+	m2.add_theme_constant_override(&"margin_right", 14)
+	m2.add_theme_constant_override(&"margin_top", 12)
+	m2.add_theme_constant_override(&"margin_bottom", 12)
+	_revival_window.add_child(m2)
+	var vb2 := VBoxContainer.new()
+	vb2.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb2.add_theme_constant_override(&"separation", 12)
+	m2.add_child(vb2)
+	var hb_r := HBoxContainer.new()
+	hb_r.add_theme_constant_override(&"separation", 12)
+	var purse := TextureRect.new()
+	purse.custom_minimum_size = Vector2(56, 56)
+	purse.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	purse.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var pt := _explorer_img_texture("empty_coin_purse.png")
+	if pt != null:
+		purse.texture = pt
+	hb_r.add_child(purse)
+	var rev_t := Label.new()
+	rev_t.text = "You're Alive!"
+	rev_t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ExplorerModalChrome.style_title_label(rev_t, "yellow")
+	hb_r.add_child(rev_t)
+	vb2.add_child(hb_r)
+	_revival_body_label = Label.new()
+	_revival_body_label.text = ("You're alive... somehow. You awaken dazed and bruised. Whoever brought you back wasn't generous-your gold is gone.")
+	_revival_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_revival_body_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ExplorerModalChrome.style_body_label(_revival_body_label, "yellow")
+	vb2.add_child(_revival_body_label)
+	var row_ok := HBoxContainer.new()
+	row_ok.alignment = BoxContainer.ALIGNMENT_CENTER
+	_revival_ok_btn = Button.new()
+	_revival_ok_btn.text = "Continue"
+	_revival_ok_btn.pressed.connect(_on_revival_ok_pressed)
+	row_ok.add_child(_revival_ok_btn)
+	vb2.add_child(row_ok)
+
+
+func _on_revival_window_close_requested() -> void:
+	_on_revival_ok_pressed()
+
+
+func _show_revival_dialog() -> void:
+	_ensure_revival_window()
+	ExplorerModalChrome.style_button(_revival_ok_btn, "primary", false)
+	ExplorerModalChrome.style_window_panel(_revival_window, "yellow")
+	ExplorerModalChrome.style_body_label(_revival_body_label, "yellow")
+	_revival_window.popup_centered()
+	_set_grid_hover_polish_for_modal(true)
+
+
+func _on_revival_ok_pressed() -> void:
+	if _revival_window != null:
+		_revival_window.hide()
+	_set_grid_hover_polish_for_modal(false)
+	_explorer_audio().play_coins()
+	_explorer_audio().stop_death_music()
+	if _net_rep != null:
+		_net_rep.client_request_revival()
+	_explorer_audio().start_wander_music_from_seed(last_seed)
+
+
+func _combat_event_panel_bg(line: String, monster_disp: String) -> Color:
+	var s := line
+	if s.contains("Player attacks") or s.contains("BACKSTAB"):
+		return Color8(0x1E, 0x3A, 0x8A)
+	if not monster_disp.is_empty() and s.contains(monster_disp) and s.contains("attacks"):
+		return Color8(0x7F, 0x1D, 0x1D)
+	if s.begins_with("Initiative:"):
+		return Color8(0x37, 0x41, 0x4F)
+	return Color8(0x1F, 0x29, 0x37)
+
+
+func _refresh_combat_event_strip(snapshot: Dictionary, for_finished: bool) -> void:
+	if _combat_events_vbox == null:
+		return
+	for c in _combat_events_vbox.get_children():
+		c.queue_free()
+	if for_finished:
+		return
+	var lines: Array = []
+	var arr: Variant = snapshot.get("log_recent_four", [])
+	if arr is Array:
+		for x in arr:
+			lines.append(str(x))
+	var md := str(snapshot.get("monster_display", ""))
+	for line in lines:
+		var panel := PanelContainer.new()
+		var sbp := StyleBoxFlat.new()
+		sbp.bg_color = _combat_event_panel_bg(str(line), md)
+		sbp.set_content_margin_all(8)
+		sbp.set_corner_radius_all(6)
+		panel.add_theme_stylebox_override(&"panel", sbp)
+		var el := Label.new()
+		el.text = str(line)
+		el.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		el.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		el.add_theme_font_size_override(&"font_size", 13)
+		el.add_theme_color_override(&"font_color", Color8(0xE5, 0xE7, 0xEB))
+		panel.add_child(el)
+		_combat_events_vbox.add_child(panel)
+
+
+func _combat_player_texture_for_session() -> Texture2D:
+	var role := str(_last_peer_roles.get(_local_peer_id, "rogue"))
+	var torch_lit := PartyMarkerArt.torch_lit_for_marker(
+		_welcome_fog_type, _torch_burn_for_cached_marker(_local_peer_id), _welcome_fog_on
+	)
+	return PartyMarkerArt._texture_for_role_facing_try(role, 0, torch_lit)
+
+
+func _combat_monster_texture_from_snapshot(snapshot: Dictionary) -> Texture2D:
+	var img := str(snapshot.get("monster_image", "")).strip_edges()
+	if img.is_empty():
+		return null
+	var path := "res://assets/explorer/images/monsters/" + img
+	if not ResourceLoader.exists(path):
+		return null
+	return load(path) as Texture2D
+
+
+func _update_combat_vs_from_snapshot(snapshot: Dictionary, for_finished: bool) -> void:
+	if _combat_vs_container == null:
+		return
+	_combat_vs_container.visible = not for_finished
+	if for_finished:
+		return
+	var p_tex := _combat_player_texture_for_session()
+	if _combat_player_tex != null:
+		_combat_player_tex.texture = p_tex
+	var m_tex := _combat_monster_texture_from_snapshot(snapshot)
+	if _combat_monster_tex != null:
+		_combat_monster_tex.texture = m_tex
+		_combat_monster_tex.flip_h = m_tex != null
+	var php: int = int(snapshot.get("player_hp", 0))
+	var pmx: int = int(snapshot.get("player_max_hp", maxi(1, php)))
+	var mhp: int = int(snapshot.get("monster_hp", 0))
+	var mmx: int = int(snapshot.get("monster_max_hp", 1))
+	var disp := str(snapshot.get("monster_display", "?"))
+	if _combat_player_hp_lbl != null:
+		_combat_player_hp_lbl.text = "%d/%d HP" % [php, pmx]
+		_combat_player_hp_lbl.add_theme_color_override(&"font_color", Color8(0x4A, 0xDE, 0x80))
+	if _combat_player_wpn_lbl != null:
+		_combat_player_wpn_lbl.text = str(snapshot.get("player_weapon", ""))
+		_combat_player_wpn_lbl.add_theme_color_override(&"font_color", Color8(0xFB, 0x92, 0x0C))
+	if _combat_player_dice_lbl != null:
+		_combat_player_dice_lbl.text = str(snapshot.get("player_damage_dice", ""))
+		_combat_player_dice_lbl.add_theme_color_override(&"font_color", Color8(0xC0, 0x9C, 0xFF))
+	if _combat_monster_name_lbl != null:
+		_combat_monster_name_lbl.text = disp
+	if _combat_monster_hp_lbl != null:
+		_combat_monster_hp_lbl.text = "%d/%d HP" % [mhp, mmx]
+		_combat_monster_hp_lbl.add_theme_color_override(&"font_color", Color8(0xF8, 0x71, 0x71))
+	if _combat_monster_wpn_lbl != null:
+		_combat_monster_wpn_lbl.text = str(snapshot.get("monster_weapon", ""))
+		_combat_monster_wpn_lbl.add_theme_color_override(&"font_color", Color8(0xFB, 0x92, 0x0C))
+	if _combat_monster_dice_lbl != null:
+		_combat_monster_dice_lbl.text = str(snapshot.get("monster_damage_dice", ""))
+		_combat_monster_dice_lbl.add_theme_color_override(&"font_color", Color8(0xC0, 0x9C, 0xFF))
+
+
+func _deferred_scroll_combat_log_to_bottom() -> void:
+	if _combat_log_scroll != null:
+		_combat_log_scroll.scroll_vertical = int(_combat_log_scroll.get_v_scroll_bar().max_value)
+
+
+func _scroll_combat_log_to_bottom() -> void:
+	if _combat_log_scroll == null:
+		return
+	call_deferred(&"_deferred_scroll_combat_log_to_bottom")
 
 
 func _ensure_combat_window() -> void:
@@ -879,13 +1473,14 @@ func _ensure_combat_window() -> void:
 		return
 	_combat_window = Window.new()
 	_combat_window.name = "CombatWindow"
-	_combat_window.title = "Combat"
-	_combat_window.size = Vector2i(480, 420)
+	_combat_window.title = "Combat!"
+	_combat_window.size = Vector2i(520, 560)
 	_combat_window.popup_window = true
 	_combat_window.unresizable = true
 	_combat_window.transient = true
 	_combat_window.exclusive = true
 	_combat_window.visible = false
+	## `Window` has no `hide_on_close`; close is not applied unless we `hide()` in `close_requested`.
 	_combat_window.close_requested.connect(_on_combat_window_close_requested)
 	add_child(_combat_window)
 
@@ -906,28 +1501,118 @@ func _ensure_combat_window() -> void:
 	_combat_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(_combat_title_label)
 
-	_combat_hp_label = Label.new()
-	_combat_hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vb.add_child(_combat_hp_label)
+	_combat_surprise_label = Label.new()
+	_combat_surprise_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_combat_surprise_label.visible = false
+	vb.add_child(_combat_surprise_label)
+
+	_combat_vs_container = HBoxContainer.new()
+	_combat_vs_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	_combat_vs_container.add_theme_constant_override("separation", 16)
+	vb.add_child(_combat_vs_container)
+
+	var player_col := VBoxContainer.new()
+	player_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	player_col.alignment = BoxContainer.ALIGNMENT_CENTER
+	_combat_vs_container.add_child(player_col)
+	_combat_player_tex = TextureRect.new()
+	_combat_player_tex.custom_minimum_size = Vector2(48, 48)
+	_combat_player_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_combat_player_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	player_col.add_child(_combat_player_tex)
+	var you_lbl := Label.new()
+	you_lbl.text = "You"
+	you_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	you_lbl.add_theme_font_size_override(&"font_size", 14)
+	you_lbl.add_theme_color_override(&"font_color", Color.WHITE)
+	player_col.add_child(you_lbl)
+	_combat_player_hp_lbl = Label.new()
+	_combat_player_hp_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_combat_player_hp_lbl.add_theme_font_size_override(&"font_size", 12)
+	player_col.add_child(_combat_player_hp_lbl)
+	_combat_player_wpn_lbl = Label.new()
+	_combat_player_wpn_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_combat_player_wpn_lbl.add_theme_font_size_override(&"font_size", 12)
+	player_col.add_child(_combat_player_wpn_lbl)
+	_combat_player_dice_lbl = Label.new()
+	_combat_player_dice_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_combat_player_dice_lbl.add_theme_font_size_override(&"font_size", 12)
+	player_col.add_child(_combat_player_dice_lbl)
+
+	var vs_lbl := Label.new()
+	vs_lbl.text = "VS"
+	vs_lbl.add_theme_font_size_override(&"font_size", 18)
+	vs_lbl.add_theme_color_override(&"font_color", Color8(0xF8, 0x71, 0x71))
+	_combat_vs_container.add_child(vs_lbl)
+
+	var monster_col := VBoxContainer.new()
+	monster_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	monster_col.alignment = BoxContainer.ALIGNMENT_CENTER
+	_combat_vs_container.add_child(monster_col)
+	_combat_monster_tex = TextureRect.new()
+	_combat_monster_tex.custom_minimum_size = Vector2(48, 48)
+	_combat_monster_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_combat_monster_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	monster_col.add_child(_combat_monster_tex)
+	_combat_monster_name_lbl = Label.new()
+	_combat_monster_name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_combat_monster_name_lbl.add_theme_font_size_override(&"font_size", 14)
+	_combat_monster_name_lbl.add_theme_color_override(&"font_color", Color.WHITE)
+	monster_col.add_child(_combat_monster_name_lbl)
+	_combat_monster_hp_lbl = Label.new()
+	_combat_monster_hp_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_combat_monster_hp_lbl.add_theme_font_size_override(&"font_size", 12)
+	monster_col.add_child(_combat_monster_hp_lbl)
+	_combat_monster_wpn_lbl = Label.new()
+	_combat_monster_wpn_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_combat_monster_wpn_lbl.add_theme_font_size_override(&"font_size", 12)
+	monster_col.add_child(_combat_monster_wpn_lbl)
+	_combat_monster_dice_lbl = Label.new()
+	_combat_monster_dice_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_combat_monster_dice_lbl.add_theme_font_size_override(&"font_size", 12)
+	monster_col.add_child(_combat_monster_dice_lbl)
+
+	_combat_log_scroll = ScrollContainer.new()
+	_combat_log_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_combat_log_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_combat_log_scroll.custom_minimum_size = Vector2(
+		0, float(ExplorerModalChrome.SCROLL_BODY_MAX_PX)
+	)
+	vb.add_child(_combat_log_scroll)
+
+	var log_inner := VBoxContainer.new()
+	log_inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	log_inner.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	_combat_log_scroll.add_child(log_inner)
+
+	_combat_events_vbox = VBoxContainer.new()
+	_combat_events_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_combat_events_vbox.add_theme_constant_override("separation", 6)
+	log_inner.add_child(_combat_events_vbox)
 
 	_combat_log_label = Label.new()
 	_combat_log_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_combat_log_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_combat_log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	vb.add_child(_combat_log_label)
+	_combat_log_label.visible = false
+	log_inner.add_child(_combat_log_label)
 
-	var combat_btn_row := HBoxContainer.new()
-	combat_btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	combat_btn_row.add_theme_constant_override("separation", 12)
-	vb.add_child(combat_btn_row)
+	_combat_btn_row = HBoxContainer.new()
+	_combat_btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_combat_btn_row.add_theme_constant_override("separation", 12)
+	_combat_btn_row.size_flags_vertical = Control.SIZE_SHRINK_END
+	vb.add_child(_combat_btn_row)
 	_combat_attack_btn = Button.new()
 	_combat_attack_btn.text = "Attack"
 	_combat_attack_btn.pressed.connect(_on_combat_attack_pressed)
-	combat_btn_row.add_child(_combat_attack_btn)
+	if ResourceLoader.exists("res://assets/explorer/images/d20.png"):
+		_combat_attack_btn.icon = load("res://assets/explorer/images/d20.png") as Texture2D
+	_combat_btn_row.add_child(_combat_attack_btn)
 	_combat_flee_btn = Button.new()
 	_combat_flee_btn.text = "Flee"
 	_combat_flee_btn.pressed.connect(_on_combat_flee_pressed)
-	combat_btn_row.add_child(_combat_flee_btn)
+	if ResourceLoader.exists("res://assets/explorer/images/evade.png"):
+		_combat_flee_btn.icon = load("res://assets/explorer/images/evade.png") as Texture2D
+	_combat_btn_row.add_child(_combat_flee_btn)
 
 	_apply_combat_window_chrome()
 
@@ -938,8 +1623,9 @@ func _apply_combat_window_chrome() -> void:
 	ExplorerModalChrome.style_window_panel(_combat_window, "red")
 	if _combat_title_label != null:
 		ExplorerModalChrome.style_title_label(_combat_title_label, "red")
-	if _combat_hp_label != null:
-		ExplorerModalChrome.style_body_label(_combat_hp_label, "red")
+	if _combat_surprise_label != null:
+		ExplorerModalChrome.style_body_label(_combat_surprise_label, "red")
+		_combat_surprise_label.add_theme_color_override(&"font_color", Color8(0xF8, 0x71, 0x71))
 	if _combat_log_label != null:
 		ExplorerModalChrome.style_body_label(_combat_log_label, "red")
 	var atk_var := "primary"
@@ -949,12 +1635,36 @@ func _apply_combat_window_chrome() -> void:
 		ExplorerModalChrome.style_button(_combat_attack_btn, atk_var, _combat_attack_btn.disabled)
 	if _combat_flee_btn != null:
 		ExplorerModalChrome.style_button(_combat_flee_btn, "secondary", _combat_flee_btn.disabled)
+	_apply_combat_action_buttons_compact()
+
+
+## After `ExplorerModalChrome.style_button` (40px min), cap icon size for combat row (shared with door / feature).
+func _apply_combat_action_buttons_compact() -> void:
+	for b: Button in [_combat_attack_btn, _combat_flee_btn]:
+		if b == null:
+			continue
+		ExplorerModalChrome.tighten_button_for_modal_icon_row(b)
+
+
+## Door rows with icons — same compact sizing as combat / special feature.
+func _apply_door_action_buttons_compact() -> void:
+	for b: Button in [
+		_door_enter_btn,
+		_door_pass_cancel_btn,
+		_door_pick_lock_btn,
+		_door_unlock_cancel_btn,
+		_door_break_btn,
+		_door_cancel_btn,
+		_door_ok_button,
+	]:
+		if b == null:
+			continue
+		ExplorerModalChrome.tighten_button_for_modal_icon_row(b)
 
 
 func _on_combat_window_close_requested() -> void:
-	if _combat_window != null:
-		_combat_window.hide()
-	_set_grid_hover_polish_for_modal(false)
+	## Explorer combat modal has no dismiss; ignore close (movement stays blocked server-side).
+	pass
 
 
 func _on_combat_attack_pressed() -> void:
@@ -988,43 +1698,51 @@ func _clear_combat_finish_timer() -> void:
 
 func _on_combat_finish_timer_tick() -> void:
 	_combat_finish_timer = null
+	_combat_last_snapshot.clear()
 	if _combat_window != null:
 		_combat_window.hide()
 	_set_grid_hover_polish_for_modal(false)
 	if _combat_finish_victory:
 		_pending_victory_treasure_gold = _combat_finish_treasure
+		_show_victory_after_combat()
 	elif _combat_finish_flee_success:
 		_pending_victory_treasure_gold = 0
 		_explorer_audio().resume_wander_after_combat(last_seed)
+		_on_encounter_resolution_dialog(_combat_finish_title, _combat_finish_body)
 	else:
 		_pending_victory_treasure_gold = 0
-		_explorer_audio().play_death_sting()
-		_explorer_audio().start_death_music()
-	_on_encounter_resolution_dialog(_combat_finish_title, _combat_finish_body)
+		_show_death_dialog("")
 
 
 func _on_combat_state_changed(snapshot: Dictionary) -> void:
 	if _net_rep == null:
 		return
+	_combat_last_snapshot = snapshot.duplicate(true)
 	if bool(snapshot.get("finished", false)):
 		_play_combat_sfx_from_snapshot(snapshot)
 		_ensure_combat_window()
 		if _combat_title_label != null:
 			_combat_title_label.text = str(snapshot.get("outcome_title", "Combat"))
-		if _combat_hp_label != null:
-			_combat_hp_label.text = ""
+		if _combat_surprise_label != null:
+			_combat_surprise_label.visible = false
+		_refresh_combat_event_strip(snapshot, true)
 		if _combat_log_label != null:
+			_combat_log_label.visible = true
 			_combat_log_label.text = str(snapshot.get("outcome_body", snapshot.get("log_full", "")))
 		if _combat_attack_btn != null:
 			_combat_attack_btn.disabled = true
 		if _combat_flee_btn != null:
 			_combat_flee_btn.disabled = true
+		if _combat_btn_row != null:
+			_combat_btn_row.visible = true
 		_combat_finish_flee_success = bool(snapshot.get("flee_success", false))
+		_update_combat_vs_from_snapshot(snapshot, true)
 		if _combat_window != null:
-			_combat_window.title = str(snapshot.get("outcome_title", "Combat"))
+			_combat_window.title = "Combat!"
 			_apply_combat_window_chrome()
 			_combat_window.popup_centered()
 		_set_grid_hover_polish_for_modal(true)
+		_scroll_combat_log_to_bottom()
 		_clear_combat_finish_timer()
 		_combat_finish_title = str(snapshot.get("outcome_title", "Combat"))
 		_combat_finish_body = str(snapshot.get("outcome_body", snapshot.get("log_full", "")))
@@ -1040,29 +1758,37 @@ func _on_combat_state_changed(snapshot: Dictionary) -> void:
 	_ensure_combat_window()
 	if _combat_title_label != null:
 		_combat_title_label.text = str(snapshot.get("title", "Combat"))
-	if _combat_hp_label != null:
-		_combat_hp_label.text = (
-			"You: %d HP  |  %s: %d / %d HP"
-			% [
-				int(snapshot.get("player_hp", 0)),
-				str(snapshot.get("monster_display", "?")),
-				int(snapshot.get("monster_hp", 0)),
-				int(snapshot.get("monster_max_hp", 1)),
-			]
-		)
+	if _combat_surprise_label != null:
+		var surp2: bool = bool(snapshot.get("surprise_attack", false))
+		if surp2:
+			_combat_surprise_label.text = (
+				"%s is SURPRISED!" % str(snapshot.get("monster_display", ""))
+			)
+			_combat_surprise_label.visible = true
+		else:
+			_combat_surprise_label.visible = false
 	if _combat_log_label != null:
-		_combat_log_label.text = str(snapshot.get("log_full", ""))
+		_combat_log_label.visible = false
+		_combat_log_label.text = ""
+	_refresh_combat_event_strip(snapshot, false)
+	_update_combat_vs_from_snapshot(snapshot, false)
 	if _combat_attack_btn != null:
 		var surp: bool = bool(snapshot.get("surprise_attack", false))
 		_combat_attack_btn.text = "Backstab" if surp else "Attack"
 		_combat_attack_btn.disabled = not bool(snapshot.get("can_attack", false))
 	if _combat_flee_btn != null:
 		_combat_flee_btn.disabled = not bool(snapshot.get("can_flee", false))
+	var show_btns: bool = (
+		bool(snapshot.get("awaiting_player", false)) and not bool(snapshot.get("finished", false))
+	)
+	if _combat_btn_row != null:
+		_combat_btn_row.visible = show_btns
 	if _combat_window != null:
-		_combat_window.title = str(snapshot.get("title", "Combat"))
+		_combat_window.title = "Combat!"
 		_apply_combat_window_chrome()
 		_combat_window.popup_centered()
 	_set_grid_hover_polish_for_modal(true)
+	_scroll_combat_log_to_bottom()
 
 
 func _on_net_fog_full_resync(cells: PackedVector2Array, view: Node2D) -> void:
@@ -1150,6 +1876,18 @@ func _on_trap_defused_doors_delta(cells: PackedVector2Array) -> void:
 		_grid_view.call("apply_trap_defused_doors_delta", cells)
 
 
+func _door_dialog_title_for_action(action: String) -> String:
+	match action:
+		"pass":
+			return "Open Door"
+		"unlock", "break_door", "break_result":
+			return "Unlock Door"
+		"trap_sprung":
+			return "Trap"
+		_:
+			return "Door"
+
+
 func _on_door_prompt_offered(action: String, cell: Vector2i, message: String) -> void:
 	if _net_rep == null:
 		return
@@ -1157,13 +1895,26 @@ func _on_door_prompt_offered(action: String, cell: Vector2i, message: String) ->
 	_pending_door_action = action
 	_pending_door_cell = cell
 	_door_message.text = message
+	var title_str := _door_dialog_title_for_action(action)
+	if _door_title_label != null:
+		_door_title_label.text = title_str
+	if _door_window != null:
+		_door_window.title = title_str
 	## Explorer `TrapSystem.apply_damage` — `monster_hit` when door disarm fails (non-lethal uses this modal).
 	if action == "trap_disarm_result" and message.contains("fail to disarm"):
 		_explorer_audio().play_combat_sfx("monster_hit", "")
+	var is_pass := action == "pass"
+	var is_break := action == "break_door"
+	var is_unlock := action == "unlock"
 	if _door_ok_button != null:
-		_door_ok_button.visible = action != "break_door"
+		_door_ok_button.visible = not is_pass and not is_break and not is_unlock
+		_door_ok_button.text = "OK"
+	if _door_pass_row != null:
+		_door_pass_row.visible = is_pass
+	if _door_unlock_row != null:
+		_door_unlock_row.visible = is_unlock
 	if _door_break_row != null:
-		_door_break_row.visible = action == "break_door"
+		_door_break_row.visible = is_break
 	if _door_prompt_icon != null:
 		match action:
 			"trap_stub", "trap_sprung", "trap_detected", "trap_disarm_result":
@@ -1204,14 +1955,25 @@ func _apply_door_window_chrome() -> void:
 		return
 	var sch := ExplorerModalChrome.scheme_for_door_action(_pending_door_action, _door_message.text)
 	ExplorerModalChrome.style_window_panel(_door_window, sch)
+	if _door_title_label != null:
+		ExplorerModalChrome.style_title_label(_door_title_label, sch)
 	if _door_message != null:
 		ExplorerModalChrome.style_body_label(_door_message, sch)
 	if _door_ok_button != null:
 		ExplorerModalChrome.style_button(_door_ok_button, "primary", false)
+	if _door_enter_btn != null:
+		ExplorerModalChrome.style_button(_door_enter_btn, "primary", false)
+	if _door_pass_cancel_btn != null:
+		ExplorerModalChrome.style_button(_door_pass_cancel_btn, "secondary", false)
+	if _door_pick_lock_btn != null:
+		ExplorerModalChrome.style_button(_door_pick_lock_btn, "primary", false)
+	if _door_unlock_cancel_btn != null:
+		ExplorerModalChrome.style_button(_door_unlock_cancel_btn, "secondary", false)
 	if _door_break_btn != null:
 		ExplorerModalChrome.style_button(_door_break_btn, "primary", false)
 	if _door_cancel_btn != null:
 		ExplorerModalChrome.style_button(_door_cancel_btn, "secondary", false)
+	_apply_door_action_buttons_compact()
 
 
 func _set_grid_hover_polish_for_modal(blocked: bool) -> void:
@@ -1299,13 +2061,222 @@ func _ensure_world_interaction_dialog() -> void:
 	add_child(_world_dialog)
 
 
+func _ensure_treasure_discovery_window() -> void:
+	if _treasure_discovery_window != null:
+		return
+	_treasure_discovery_window = Window.new()
+	_treasure_discovery_window.name = "TreasureDiscoveryWindow"
+	_treasure_discovery_window.title = "Treasure Found!"
+	## Same footprint as victory modal; avoid fixed 256px scroll min + footer (clips under short window height).
+	_treasure_discovery_window.size = Vector2i(480, 300)
+	_treasure_discovery_window.popup_window = true
+	_treasure_discovery_window.unresizable = true
+	_treasure_discovery_window.transient = true
+	_treasure_discovery_window.exclusive = true
+	_treasure_discovery_window.visible = false
+	_treasure_discovery_window.close_requested.connect(
+		_on_treasure_discovery_window_close_requested
+	)
+	add_child(_treasure_discovery_window)
+	var margin_td := MarginContainer.new()
+	margin_td.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin_td.add_theme_constant_override(&"margin_left", 14)
+	margin_td.add_theme_constant_override(&"margin_right", 14)
+	margin_td.add_theme_constant_override(&"margin_top", 12)
+	margin_td.add_theme_constant_override(&"margin_bottom", 12)
+	_treasure_discovery_window.add_child(margin_td)
+	var vb_td := VBoxContainer.new()
+	vb_td.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb_td.add_theme_constant_override(&"separation", 12)
+	margin_td.add_child(vb_td)
+	var header_td := HBoxContainer.new()
+	header_td.add_theme_constant_override(&"separation", 12)
+	_treasure_discovery_icon = TextureRect.new()
+	_treasure_discovery_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_treasure_discovery_icon.custom_minimum_size = Vector2(48, 48)
+	_treasure_discovery_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	header_td.add_child(_treasure_discovery_icon)
+	_treasure_discovery_title_lbl = Label.new()
+	_treasure_discovery_title_lbl.text = "Treasure Found!"
+	_treasure_discovery_title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_td.add_child(_treasure_discovery_title_lbl)
+	vb_td.add_child(header_td)
+	_treasure_discovery_body = Label.new()
+	_treasure_discovery_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_treasure_discovery_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_treasure_discovery_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb_td.add_child(_treasure_discovery_body)
+	var row_td := HBoxContainer.new()
+	row_td.alignment = BoxContainer.ALIGNMENT_CENTER
+	_treasure_discovery_collect_btn = Button.new()
+	_treasure_discovery_collect_btn.text = "Collect Treasure"
+	_treasure_discovery_collect_btn.pressed.connect(_on_treasure_discovery_collect_pressed)
+	row_td.add_child(_treasure_discovery_collect_btn)
+	vb_td.add_child(row_td)
+	_apply_treasure_discovery_window_chrome()
+
+
+func _apply_treasure_discovery_window_chrome() -> void:
+	if _treasure_discovery_window == null:
+		return
+	ExplorerModalChrome.style_window_panel(_treasure_discovery_window, "green")
+	if _treasure_discovery_title_lbl != null:
+		ExplorerModalChrome.style_title_label(_treasure_discovery_title_lbl, "green")
+	if _treasure_discovery_body != null:
+		ExplorerModalChrome.style_body_label(_treasure_discovery_body, "green")
+	if _treasure_discovery_collect_btn != null:
+		ExplorerModalChrome.style_button(_treasure_discovery_collect_btn, "success", false)
+
+
+func _on_treasure_discovery_collect_pressed() -> void:
+	var k0 := _pending_world_kind
+	var c0 := _pending_world_cell
+	_pending_world_kind = ""
+	_pending_world_cell = Vector2i.ZERO
+	if _treasure_discovery_window != null:
+		_treasure_discovery_window.hide()
+	_set_grid_hover_polish_for_modal(false)
+	_dispatch_pending_world_pickup_action(k0, c0)
+
+
+func _on_treasure_discovery_window_close_requested() -> void:
+	_pending_world_kind = ""
+	_pending_world_cell = Vector2i.ZERO
+	if _treasure_discovery_window != null:
+		_treasure_discovery_window.hide()
+	_set_grid_hover_polish_for_modal(false)
+
+
+func _dispatch_pending_world_pickup_action(kind: String, cell: Vector2i) -> void:
+	if _net_rep == null:
+		return
+	var k := kind
+	var c := cell
+	if k == "stair" or k == "waypoint" or k == "map_link":
+		## Explorer `use_stair` — stairs only (no generic click).
+		_explorer_audio().play_stairs()
+		_net_rep.client_request_map_transition_confirm(k, c.x, c.y)
+	elif k == "treasure":
+		## Explorer `TreasureSystem.dismiss_treasure` — `coins` on collect (not click).
+		_explorer_audio().play_coins()
+		_net_rep.client_request_treasure_dismiss(c.x, c.y)
+	elif k == "trapped_treasure_undetected" or k == "room_trap_undetected":
+		## Explorer `TrapSystem.apply_damage` — `monster_hit` when trap damage is applied (Continue after surprise).
+		_explorer_audio().play_combat_sfx("monster_hit", "")
+		if k == "trapped_treasure_undetected":
+			_net_rep.client_request_trapped_treasure_undetected_ack(c.x, c.y)
+		else:
+			_net_rep.client_request_room_trap_undetected_ack(c.x, c.y)
+	elif (
+		k == "food_pickup"
+		or k == "healing_potion_pickup"
+		or k == "torch_pickup"
+		or k == "quest_item_pickup"
+	):
+		# Explorer dismiss food / potion / torch / `dismiss_quest_completed` pickup — pickup only (no click).
+		_explorer_audio().play_pickup()
+		_net_rep.client_request_pickup_dismiss(k, c.x, c.y)
+	else:
+		_explorer_audio().play_click()
+
+
+func _ensure_label_location_window() -> void:
+	if _label_location_window != null:
+		return
+	_label_location_window = Window.new()
+	_label_location_window.name = "LabelLocationWindow"
+	_label_location_window.title = "Location Info"
+	_label_location_window.size = Vector2i(520, 320)
+	_label_location_window.popup_window = true
+	_label_location_window.unresizable = true
+	_label_location_window.transient = true
+	_label_location_window.exclusive = true
+	_label_location_window.visible = false
+	_label_location_window.close_requested.connect(_on_label_location_window_close_requested)
+	add_child(_label_location_window)
+	var margin_l := MarginContainer.new()
+	margin_l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin_l.add_theme_constant_override("margin_left", 14)
+	margin_l.add_theme_constant_override("margin_right", 14)
+	margin_l.add_theme_constant_override("margin_top", 12)
+	margin_l.add_theme_constant_override("margin_bottom", 12)
+	_label_location_window.add_child(margin_l)
+	var vb_l := VBoxContainer.new()
+	vb_l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb_l.add_theme_constant_override(&"separation", 12)
+	margin_l.add_child(vb_l)
+	var header_l := HBoxContainer.new()
+	header_l.add_theme_constant_override(&"separation", 12)
+	_label_location_icon = TextureRect.new()
+	_label_location_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_label_location_icon.custom_minimum_size = Vector2(48, 48)
+	_label_location_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	header_l.add_child(_label_location_icon)
+	_label_location_title_lbl = Label.new()
+	_label_location_title_lbl.text = "Location Info"
+	_label_location_title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_l.add_child(_label_location_title_lbl)
+	vb_l.add_child(header_l)
+	var lbl_scroll := ScrollContainer.new()
+	lbl_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lbl_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl_scroll.custom_minimum_size = Vector2(0, ExplorerModalChrome.SCROLL_BODY_MAX_PX)
+	vb_l.add_child(lbl_scroll)
+	_label_location_body = Label.new()
+	_label_location_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_label_location_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_label_location_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl_scroll.add_child(_label_location_body)
+	var row_l := HBoxContainer.new()
+	row_l.alignment = BoxContainer.ALIGNMENT_CENTER
+	_label_location_continue_btn = Button.new()
+	_label_location_continue_btn.text = "Continue"
+	_label_location_continue_btn.pressed.connect(_on_label_location_continue_pressed)
+	row_l.add_child(_label_location_continue_btn)
+	vb_l.add_child(row_l)
+	_apply_label_location_window_chrome()
+
+
+func _apply_label_location_window_chrome() -> void:
+	if _label_location_window == null:
+		return
+	ExplorerModalChrome.style_window_panel(_label_location_window, "green")
+	if _label_location_title_lbl != null:
+		ExplorerModalChrome.style_title_label(_label_location_title_lbl, "green")
+	if _label_location_body != null:
+		ExplorerModalChrome.style_body_label(_label_location_body, "green")
+	if _label_location_continue_btn != null:
+		ExplorerModalChrome.style_button(_label_location_continue_btn, "success", false)
+
+
+func _hide_label_location_window() -> void:
+	if _label_location_window != null:
+		_label_location_window.hide()
+
+
+func _on_label_location_continue_pressed() -> void:
+	_explorer_audio().play_click()
+	_hide_label_location_window()
+	_pending_world_kind = ""
+	_pending_world_cell = Vector2i.ZERO
+	_set_grid_hover_polish_for_modal(false)
+
+
+func _on_label_location_window_close_requested() -> void:
+	_hide_label_location_window()
+	_pending_world_kind = ""
+	_pending_world_cell = Vector2i.ZERO
+	_set_grid_hover_polish_for_modal(false)
+
+
 func _ensure_special_feature_remote_window() -> void:
 	if _special_feature_window != null:
 		return
 	_special_feature_window = Window.new()
 	_special_feature_window.name = "SpecialFeatureRemoteWindow"
-	_special_feature_window.title = "Feature"
-	_special_feature_window.size = Vector2i(520, 300)
+	_special_feature_window.title = "Something Interesting!"
+	## Tall enough for header + SCROLL_BODY_MAX_PX (256) + footer row; 300px clipped Investigate/Skip.
+	_special_feature_window.size = Vector2i(520, 460)
 	_special_feature_window.popup_window = true
 	_special_feature_window.unresizable = true
 	_special_feature_window.transient = true
@@ -1322,25 +2293,48 @@ func _ensure_special_feature_remote_window() -> void:
 	_special_feature_window.add_child(margin)
 	var vb := VBoxContainer.new()
 	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb.add_theme_constant_override(&"separation", 12)
 	margin.add_child(vb)
+	var header_sf := HBoxContainer.new()
+	header_sf.add_theme_constant_override(&"separation", 12)
+	_special_feature_header_icon = TextureRect.new()
+	_special_feature_header_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_special_feature_header_icon.custom_minimum_size = Vector2(48, 48)
+	_special_feature_header_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	var mg_head := _explorer_img_texture("magnifying_glass.png")
+	if mg_head != null:
+		_special_feature_header_icon.texture = mg_head
+	header_sf.add_child(_special_feature_header_icon)
+	_special_feature_title_lbl = Label.new()
+	_special_feature_title_lbl.text = "Something Interesting!"
+	_special_feature_title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_sf.add_child(_special_feature_title_lbl)
+	vb.add_child(header_sf)
 	var sf_scroll := ScrollContainer.new()
-	sf_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sf_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sf_scroll.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	sf_scroll.custom_minimum_size = Vector2(0, ExplorerModalChrome.SCROLL_BODY_MAX_PX)
 	vb.add_child(sf_scroll)
 	_special_feature_message_label = Label.new()
 	_special_feature_message_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_special_feature_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_special_feature_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	sf_scroll.add_child(_special_feature_message_label)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 16)
 	_special_feature_investigate_btn = Button.new()
 	_special_feature_investigate_btn.text = "Investigate"
+	var mg_btn := _explorer_img_texture("magnifying_glass.png")
+	if mg_btn != null:
+		_special_feature_investigate_btn.icon = mg_btn
 	_special_feature_investigate_btn.pressed.connect(_on_special_feature_investigate_pressed)
 	row.add_child(_special_feature_investigate_btn)
 	_special_feature_close_btn = Button.new()
-	_special_feature_close_btn.text = "Close"
+	_special_feature_close_btn.text = "Skip"
+	var cn_sf := _explorer_img_texture("cancel.png")
+	if cn_sf != null:
+		_special_feature_close_btn.icon = cn_sf
 	_special_feature_close_btn.pressed.connect(_on_special_feature_close_pressed)
 	row.add_child(_special_feature_close_btn)
 	vb.add_child(row)
@@ -1352,12 +2346,18 @@ func _apply_special_feature_window_chrome() -> void:
 	if _special_feature_window == null:
 		return
 	ExplorerModalChrome.style_window_panel(_special_feature_window, "blue")
+	if _special_feature_title_lbl != null:
+		ExplorerModalChrome.style_title_label(_special_feature_title_lbl, "blue")
 	if _special_feature_message_label != null:
 		ExplorerModalChrome.style_body_label(_special_feature_message_label, "blue")
 	if _special_feature_investigate_btn != null:
 		ExplorerModalChrome.style_button(_special_feature_investigate_btn, "primary", false)
 	if _special_feature_close_btn != null:
 		ExplorerModalChrome.style_button(_special_feature_close_btn, "secondary", false)
+	if _special_feature_investigate_btn != null:
+		ExplorerModalChrome.tighten_button_for_modal_icon_row(_special_feature_investigate_btn)
+	if _special_feature_close_btn != null:
+		ExplorerModalChrome.tighten_button_for_modal_icon_row(_special_feature_close_btn)
 
 
 func _on_special_feature_window_close_requested() -> void:
@@ -1687,8 +2687,16 @@ func _on_world_interaction_offered(
 		_pending_encounter_cell = cell
 		_ensure_encounter_choice_window()
 		_encounter_window.title = title
+		if _encounter_title_label != null:
+			_encounter_title_label.text = title
+		var eff_tile := GridWalk.tile_at(_path_grid, cell)
+		var m_tex := EncounterMapToken.texture_for_encounter_tile(eff_tile)
+		if _encounter_header_icon != null:
+			_encounter_header_icon.texture = m_tex
+			_encounter_header_icon.visible = m_tex != null
 		if _encounter_message_label != null:
 			_encounter_message_label.text = message
+		_apply_encounter_choice_window_chrome()
 		_encounter_window.popup_centered()
 		_set_grid_hover_polish_for_modal(true)
 		return
@@ -1699,6 +2707,25 @@ func _on_world_interaction_offered(
 		if _npc_quest_offer_label != null:
 			_npc_quest_offer_label.text = message
 		_npc_quest_offer_window.popup_centered()
+		_set_grid_hover_polish_for_modal(true)
+		return
+	if (
+		kind == "room_label"
+		or kind == "corridor_label"
+		or kind == "area_label"
+		or kind == "building_label"
+	):
+		_pending_world_kind = kind
+		_pending_world_cell = cell
+		_ensure_label_location_window()
+		var pic := _explorer_label_icon_texture(kind)
+		if _label_location_icon != null:
+			_label_location_icon.texture = pic
+			_label_location_icon.visible = pic != null
+		if _label_location_body != null:
+			_label_location_body.text = message
+		_apply_label_location_window_chrome()
+		_label_location_window.popup_centered()
 		_set_grid_hover_polish_for_modal(true)
 		return
 	if kind == "encounter_npc":
@@ -1716,8 +2743,11 @@ func _on_world_interaction_offered(
 		_pending_special_feature_cell = cell
 		_ensure_special_feature_remote_window()
 		_special_feature_window.title = title
+		if _special_feature_title_lbl != null:
+			_special_feature_title_lbl.text = title
 		if _special_feature_message_label != null:
 			_special_feature_message_label.text = message
+		_apply_special_feature_window_chrome()
 		_special_feature_window.popup_centered()
 		_set_grid_hover_polish_for_modal(true)
 		return
@@ -1761,17 +2791,40 @@ func _on_world_interaction_offered(
 		_world_dialog.popup_centered()
 		_set_grid_hover_polish_for_modal(true)
 		return
+	if kind == "treasure":
+		_pending_world_kind = kind
+		_pending_world_cell = cell
+		_ensure_treasure_discovery_window()
+		if _treasure_discovery_title_lbl != null:
+			_treasure_discovery_title_lbl.text = title
+		if _treasure_discovery_body != null:
+			_treasure_discovery_body.text = message
+		if _treasure_discovery_icon != null:
+			var tg_td := _explorer_img_texture("gold.png")
+			_treasure_discovery_icon.texture = tg_td
+			_treasure_discovery_icon.visible = tg_td != null
+		_apply_treasure_discovery_window_chrome()
+		_explorer_audio().play_chest_open()
+		_treasure_discovery_window.popup_centered()
+		_set_grid_hover_polish_for_modal(true)
+		return
 	_pending_world_kind = kind
 	_pending_world_cell = cell
 	_ensure_world_interaction_dialog()
-	_world_dialog.ok_button_text = "OK"
+	match kind:
+		"food_pickup":
+			_world_dialog.ok_button_text = "Eat Food"
+		"healing_potion_pickup":
+			_world_dialog.ok_button_text = "Take Potion"
+		"torch_pickup":
+			_world_dialog.ok_button_text = "Take Torch"
+		_:
+			_world_dialog.ok_button_text = "OK"
 	_world_dialog.title = title
 	_world_dialog.dialog_text = message
 	if kind == "quest_item_pickup" and title == "Quest Completed!":
 		## Explorer `quest_item_system.ex` `complete_quest_discovery` — `orch_hit` when completion dialog opens.
 		_explorer_audio().play_quest_completion_fanfare()
-	if kind == "treasure":
-		_explorer_audio().play_chest_open()
 	_apply_world_dialog_chrome()
 	_world_dialog.popup_centered()
 	_set_grid_hover_polish_for_modal(true)
@@ -1793,36 +2846,7 @@ func _on_world_dialog_confirmed() -> void:
 	if _world_dialog != null:
 		_world_dialog.hide()
 	_set_grid_hover_polish_for_modal(false)
-	if _net_rep == null:
-		return
-	var k := k0
-	var c := c0
-	if k == "stair" or k == "waypoint" or k == "map_link":
-		## Explorer `use_stair` — stairs only (no generic click).
-		_explorer_audio().play_stairs()
-		_net_rep.client_request_map_transition_confirm(k, c.x, c.y)
-	elif k == "treasure":
-		## Explorer `TreasureSystem.dismiss_treasure` — `coins` on collect (not click).
-		_explorer_audio().play_coins()
-		_net_rep.client_request_treasure_dismiss(c.x, c.y)
-	elif k == "trapped_treasure_undetected" or k == "room_trap_undetected":
-		## Explorer `TrapSystem.apply_damage` — `monster_hit` when trap damage is applied (Continue after surprise).
-		_explorer_audio().play_combat_sfx("monster_hit", "")
-		if k == "trapped_treasure_undetected":
-			_net_rep.client_request_trapped_treasure_undetected_ack(c.x, c.y)
-		else:
-			_net_rep.client_request_room_trap_undetected_ack(c.x, c.y)
-	elif (
-		k == "food_pickup"
-		or k == "healing_potion_pickup"
-		or k == "torch_pickup"
-		or k == "quest_item_pickup"
-	):
-		# Explorer dismiss food / potion / torch / `dismiss_quest_completed` pickup — pickup only (no click).
-		_explorer_audio().play_pickup()
-		_net_rep.client_request_pickup_dismiss(k, c.x, c.y)
-	else:
-		_explorer_audio().play_click()
+	_dispatch_pending_world_pickup_action(k0, c0)
 
 
 func _ensure_stats_hud() -> void:
@@ -2550,6 +3574,10 @@ func _on_net_fog_delta(cells: PackedVector2Array, view: Node2D) -> void:
 
 
 func _on_net_grid_clicked(c: Vector2i, net_rep: Node, view: Node2D) -> void:
+	if _combat_window != null and _combat_window.visible:
+		if view.has_method("clear_path_preview"):
+			view.clear_path_preview()
+		return
 	if _welcome_fog_on and not _client_revealed.get(c, false):
 		if view.has_method("clear_path_preview"):
 			view.clear_path_preview()
@@ -2645,6 +3673,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _combat_window != null and _combat_window.visible:
 		return
 	if _world_dialog != null and _world_dialog.visible:
+		return
+	if _treasure_discovery_window != null and _treasure_discovery_window.visible:
+		return
+	if _label_location_window != null and _label_location_window.visible:
+		return
+	if _special_feature_window != null and _special_feature_window.visible:
 		return
 	var e := event as InputEventKey
 	if e == null or not e.pressed or e.echo:

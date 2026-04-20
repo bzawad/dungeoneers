@@ -4,6 +4,9 @@ extends RefCounted
 
 const SCROLL_BODY_MAX_PX := 256
 const BTN_MIN_HEIGHT_PX := 40
+## Modal footer rows with `.icon` (door, encounter, special feature, combat): matches `dungeon_session` compact rows.
+const MODAL_ACTION_BTN_MIN_HEIGHT_PX := 32
+const MODAL_ACTION_ICON_MAX_WIDTH_PX := 20
 
 
 static func normalize_scheme(scheme: String) -> String:
@@ -172,6 +175,26 @@ static func style_button(btn: Button, variant: String, disabled: bool) -> void:
 		btn.modulate = Color.WHITE
 
 
+## Call after `style_button` on modal action buttons so Explorer-sized PNG icons do not dominate the row.
+static func tighten_button_for_modal_icon_row(btn: Button) -> void:
+	if btn == null:
+		return
+	const MARGIN_H := 10.0
+	const MARGIN_V := 4.0
+	btn.custom_minimum_size = Vector2(0, MODAL_ACTION_BTN_MIN_HEIGHT_PX)
+	btn.add_theme_font_size_override(&"font_size", 14)
+	btn.add_theme_constant_override(&"icon_max_width", MODAL_ACTION_ICON_MAX_WIDTH_PX)
+	for sn: StringName in [&"normal", &"hover", &"pressed"]:
+		var sb0: Variant = btn.get_theme_stylebox(sn)
+		if sb0 is StyleBoxFlat:
+			var sb := (sb0 as StyleBoxFlat).duplicate() as StyleBoxFlat
+			sb.content_margin_left = MARGIN_H
+			sb.content_margin_right = MARGIN_H
+			sb.content_margin_top = MARGIN_V
+			sb.content_margin_bottom = MARGIN_V
+			btn.add_theme_stylebox_override(sn, sb)
+
+
 static func style_item_list_for_explorer_list(il: ItemList) -> void:
 	if il == null:
 		return
@@ -258,6 +281,8 @@ static func ok_variant_for_world_kind(kind: String, title: String) -> String:
 	if kind == "quest_item_pickup" and title == "Quest Completed!":
 		return "success"
 	if kind == "treasure":
+		return "success"
+	if kind in ["food_pickup", "healing_potion_pickup", "torch_pickup"]:
 		return "success"
 	return "primary"
 
