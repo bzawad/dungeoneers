@@ -111,7 +111,7 @@ static func is_walkable_for_movement_at(
 
 
 ## Explorer `dungeon_live.ex` `walkable_tile?/1` for **pathfinding** — locked doors count as traversable for BFS;
-## server still stops at first unpicked locked door (see `DungeonReplication._server_handle_path_move`).
+## server still stops at first unpicked locked door (see `DungeonReplication._server_handle_path_move` stepped queue).
 static func is_walkable_for_pathfinding_at(
 	tile: String, cell: Vector2i, unlocked_doors: Dictionary, guards_hostile: bool = false
 ) -> bool:

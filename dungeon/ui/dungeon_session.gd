@@ -142,16 +142,6 @@ var _last_peer_torch_burn: Dictionary = {}
 var _hud_torch_burn: int = -1
 var _hud_torch_spares: int = -1
 
-## AUD-01: client-only stepped marker + `play_move_step` per edge; server still sends one position sync per path.
-const PATH_VISUAL_STEP_SEC := 0.072
-var _path_visual_gen: int = 0
-var _path_visual_active: bool = false
-var _path_visual_path: PackedVector2Array = PackedVector2Array()
-var _path_visual_start: Vector2i = Vector2i.ZERO
-var _path_visual_display: Vector2i = Vector2i.ZERO
-var _path_visual_next_idx: int = 0
-var _path_visual_audio_edges: int = 0
-var _path_step_timer: Timer = null
 var _explorer_audio_cache: Node = null
 
 
@@ -233,7 +223,6 @@ func start_from_grid(
 	local_peer_id: int = -1,
 	welcome: Dictionary = {}
 ) -> void:
-	_cancel_path_visual()
 	last_seed = seed_for_log
 	_path_grid = grid
 	_local_peer_id = local_peer_id
@@ -347,7 +336,6 @@ func start_from_grid(
 func reload_from_authority(grid: Dictionary, seed_for_log: int, welcome: Dictionary) -> void:
 	if _net_rep == null or _local_peer_id < 0:
 		return
-	_cancel_path_visual()
 	_clear_combat_finish_timer()
 	if _rumors_list_window != null and _rumors_list_window.visible:
 		_rumors_list_window.hide()
@@ -2554,75 +2542,6 @@ func _on_player_local_stats_changed(
 		_refresh_cached_marker_for_peer(_local_peer_id)
 
 
-func _ensure_path_step_timer() -> void:
-	if _path_step_timer != null:
-		return
-	_path_step_timer = Timer.new()
-	_path_step_timer.name = "PathVisualStepTimer"
-	_path_step_timer.one_shot = true
-	_path_step_timer.timeout.connect(_on_path_visual_step_timer)
-	add_child(_path_step_timer)
-
-
-func _cancel_path_visual() -> void:
-	_path_visual_gen += 1
-	if _path_step_timer != null and is_instance_valid(_path_step_timer):
-		_path_step_timer.stop()
-	_path_visual_active = false
-	_path_visual_path.clear()
-	_path_visual_next_idx = 0
-	_path_visual_audio_edges = 0
-
-
-func _start_path_visual(path: PackedVector2Array, _view: Node2D) -> void:
-	_cancel_path_visual()
-	if path.is_empty() or _local_peer_id < 0:
-		return
-	_path_visual_active = true
-	_path_visual_path = path.duplicate()
-	_path_visual_start = _net_local_cell
-	_path_visual_display = _net_local_cell
-	_path_visual_next_idx = 0
-	_path_visual_audio_edges = 0
-	_ensure_path_step_timer()
-	_path_step_timer.set_meta("path_vis_gen", _path_visual_gen)
-	_path_step_timer.start(PATH_VISUAL_STEP_SEC)
-
-
-func _on_path_visual_step_timer() -> void:
-	if _path_step_timer == null or not is_instance_valid(_path_step_timer):
-		return
-	var run_g := int(_path_step_timer.get_meta("path_vis_gen", -999))
-	if run_g != _path_visual_gen or not _path_visual_active:
-		return
-	if _path_visual_next_idx >= _path_visual_path.size():
-		return
-	var nxt := Vector2i(
-		int(_path_visual_path[_path_visual_next_idx].x),
-		int(_path_visual_path[_path_visual_next_idx].y)
-	)
-	if not GridWalk.is_king_adjacent(_path_visual_display, nxt):
-		_cancel_path_visual()
-		return
-	_path_visual_display = nxt
-	_path_visual_next_idx += 1
-	var role_v := str(_last_peer_roles.get(_local_peer_id, "rogue"))
-	if _grid_view != null and _grid_view.has_method("sync_peer_marker"):
-		_grid_view.sync_peer_marker(
-			_local_peer_id,
-			_path_visual_display,
-			role_v,
-			_marker_label_text(_local_peer_id),
-			_torch_burn_for_cached_marker(_local_peer_id)
-		)
-	_last_peer_cells[_local_peer_id] = _path_visual_display
-	_explorer_audio().play_move_step()
-	_path_visual_audio_edges += 1
-	if _path_visual_next_idx < _path_visual_path.size():
-		_path_step_timer.set_meta("path_vis_gen", _path_visual_gen)
-		_path_step_timer.start(PATH_VISUAL_STEP_SEC)
-
-
 func _on_net_fog_delta(cells: PackedVector2Array, view: Node2D) -> void:
 	for i in range(cells.size()):
 		_client_revealed[Vector2i(int(cells[i].x), int(cells[i].y))] = true
@@ -2658,10 +2577,6 @@ func _on_net_grid_clicked(c: Vector2i, net_rep: Node, view: Node2D) -> void:
 					view.clear_path_preview()
 				net_rep.client_request_world_interaction(c.x, c.y)
 				return
-	if _path_visual_active:
-		if view.has_method("clear_path_preview"):
-			view.clear_path_preview()
-		return
 	var path := GridPathfinding.find_path_8dir(
 		_path_grid,
 		_net_local_cell,
@@ -2692,7 +2607,6 @@ func _on_net_grid_clicked(c: Vector2i, net_rep: Node, view: Node2D) -> void:
 	else:
 		if view.has_method("set_path_preview"):
 			view.set_path_preview(path)
-		_start_path_visual(path, view)
 		net_rep.client_request_path_move(path)
 
 
@@ -2700,21 +2614,10 @@ func _on_net_player_position(
 	peer_id: int, cell: Vector2i, role: String, torch_burn_pct: int, view: Node2D
 ) -> void:
 	if peer_id == _local_peer_id:
-		if _path_visual_active:
-			var n_edges := GridPathfinding.king_step_count_along_path_prefix(
-				_path_visual_start, _path_visual_path, cell
-			)
-			if n_edges >= 0:
-				while _path_visual_audio_edges < n_edges:
-					_explorer_audio().play_move_step()
-					_path_visual_audio_edges += 1
-			_cancel_path_visual()
-			_net_local_cell = cell
-		else:
-			var prev_cell := _net_local_cell
-			_net_local_cell = cell
-			if prev_cell != cell:
-				_explorer_audio().play_move_step()
+		var prev_cell := _net_local_cell
+		_net_local_cell = cell
+		if prev_cell != cell:
+			_explorer_audio().play_move_step()
 		if view.has_method("clear_path_preview"):
 			view.clear_path_preview()
 	if view.has_method("sync_peer_marker"):
@@ -2742,8 +2645,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _combat_window != null and _combat_window.visible:
 		return
 	if _world_dialog != null and _world_dialog.visible:
-		return
-	if _path_visual_active:
 		return
 	var e := event as InputEventKey
 	if e == null or not e.pressed or e.echo:

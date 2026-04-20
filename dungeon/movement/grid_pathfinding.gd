@@ -37,6 +37,39 @@ static func _cell_better_open_than(
 	return c_a.x < c_b.x
 
 
+## When `from` and `to` share a row or column, return the unique cardinal segment if every cell on that
+## segment is pathfinding-walkable and (when fog is on) revealed. Otherwise empty — caller falls back to A\*.
+## Avoids Chebyshev-A\* tie-break zigzags in wide open or fog-bounded corridors for straight clicks.
+static func _try_axis_aligned_line_path(
+	grid: Dictionary,
+	from: Vector2i,
+	to: Vector2i,
+	revealed: Dictionary,
+	fog_enabled: bool,
+	unlocked_doors: Dictionary,
+	trap_defused: Dictionary,
+	guards_hostile: bool
+) -> PackedVector2Array:
+	if from.x != to.x and from.y != to.y:
+		return PackedVector2Array()
+	var packed := PackedVector2Array()
+	var cur := from
+	while cur != to:
+		var nxt: Vector2i
+		if cur.x != to.x:
+			nxt = Vector2i(cur.x + (1 if to.x > cur.x else -1), cur.y)
+		else:
+			nxt = Vector2i(cur.x, cur.y + (1 if to.y > cur.y else -1))
+		var n_tile: String = GridWalk.tile_effective(grid, nxt, trap_defused)
+		if not GridWalk.is_walkable_for_pathfinding_at(n_tile, nxt, unlocked_doors, guards_hostile):
+			return PackedVector2Array()
+		if fog_enabled and not DungeonFog.square_revealed(nxt, revealed, true):
+			return PackedVector2Array()
+		packed.append(Vector2(nxt))
+		cur = nxt
+	return packed
+
+
 static func find_path_8dir(
 	grid: Dictionary,
 	from: Vector2i,
@@ -54,6 +87,12 @@ static func find_path_8dir(
 		return PackedVector2Array()
 	if fog_enabled and not DungeonFog.square_revealed(to, revealed, true):
 		return PackedVector2Array()
+
+	var straight: PackedVector2Array = _try_axis_aligned_line_path(
+		grid, from, to, revealed, fog_enabled, unlocked_doors, trap_defused, guards_hostile
+	)
+	if not straight.is_empty():
+		return straight
 
 	var g_score: Dictionary = {}
 	var parent: Dictionary = {}

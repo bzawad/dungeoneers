@@ -25,7 +25,7 @@ Modal / dialog chrome remains documented in [`explorer_dialog_to_godot.md`](expl
 
 Authoritative Explorer sources: [`movement.ex`](../../dungeon_explorer/lib/dungeon_web/live/dungeon_live/movement.ex) (walkability, pathfinding flags, facing on keyboard step), [`map_template.ex`](../../dungeon_explorer/lib/dungeon_web/live/dungeon_live/map_template.ex) (`get_player_sprite_path/3` — sprite index per facing + torch/daylight).
 
-Godot: [`party_marker_art.gd`](../dungeon/ui/party_marker_art.gd), [`dungeon_grid_view.gd`](../dungeon/ui/dungeon_grid_view.gd) `sync_peer_marker`, 8-dir A\* in [`grid_pathfinding.gd`](../dungeon/movement/grid_pathfinding.gd), server path steps in [`dungeon_replication.gd`](../dungeon/network/dungeon_replication.gd) `_server_handle_path_move`.
+Godot: [`party_marker_art.gd`](../dungeon/ui/party_marker_art.gd), [`dungeon_grid_view.gd`](../dungeon/ui/dungeon_grid_view.gd) `sync_peer_marker`, 8-dir A\* in [`grid_pathfinding.gd`](../dungeon/movement/grid_pathfinding.gd), authoritative **stepped** path execution in [`dungeon_replication.gd`](../dungeon/network/dungeon_replication.gd) `_server_handle_path_move` (timer between cells, same cadence as historical `PATH_VISUAL_STEP_SEC` / Explorer queued `move_player`).
 
 | Topic | Explorer | Dungeoneers |
 |-------|----------|-------------|
@@ -33,7 +33,7 @@ Godot: [`party_marker_art.gd`](../dungeon/ui/party_marker_art.gd), [`dungeon_gri
 | Facing from a grid step | [`update_facing_direction/2`](../../dungeon_explorer/lib/dungeon_web/live/dungeon_live/movement.ex): non-zero `dx` picks left/right before `dy` | `PartyMarkerArt.facing_from_grid_step`: horizontal preferred when abs(dx) ≥ abs(dy) (same outcome on pure orthogonals and on king-diagonal steps used here) |
 | Click / path shape | Web client **4-dir** A\* between cells | **8-dir** (Chebyshev) pathing — intentional; paths can differ while endpoints match |
 | Path onto locked door | Stop before tile; door flow | Same: stop at last walkable cell, `_server_handle_door_click` |
-| Pathfinding vs dialogs | `is_pathfinding: true` suppresses some NPC / stair / waypoint dialogs mid-path | Server applies interactions step-wise; client path preview + stepped SFX in [`dungeon_session.gd`](../dungeon/ui/dungeon_session.gd) |
+| Pathfinding vs dialogs | `is_pathfinding: true` suppresses some NPC / stair / waypoint dialogs mid-path | Server applies `_apply_authorized_move` once per path cell (with step delay); client path preview + move SFX follow each `player_position_updated` |
 
 **Optional walk-cycle art:** with only `rogue*_0..3.png` synced, the marker shows a static facing frame. Extra in-betweens use optional files next to the base PNG, e.g. `rogue2_0_w1.png`, `rogue2_0_w2.png` for facing `0` (and the same `fighter*` / `rogue1` / `rogue2` basename order as facing art). When two or more frames exist for a facing, `sync_peer_marker` uses an `AnimatedTexture` for the move tween, then restores the static facing texture.
 

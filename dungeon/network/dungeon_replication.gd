@@ -38,6 +38,10 @@ const SOLO_LOCAL_PEER_ID := 2
 const MONSTER_COMBAT_UI_DELAY_SEC := 0.4
 ## Set to `>= 0` in tests (`check_parse.gd`) to skip real-time delay; default **-1** = use `MONSTER_COMBAT_UI_DELAY_SEC`.
 static var monster_combat_ui_delay_sec_for_tests: float = -1.0
+## Explorer `PathfindingHook` cadence — delay between authoritative path cells (`dungeon_session.gd` `PATH_VISUAL_STEP_SEC` historically).
+const PATH_MOVE_STEP_SEC := 0.072
+## Set to `>= 0` in tests to apply path steps without wall-clock delay; default **-1** = use `PATH_MOVE_STEP_SEC`.
+static var path_move_step_sec_for_tests: float = -1.0
 
 ## Bumped when welcome/dungeon RPC fields change incompatibly (6 = `authority_player_level`; 7 = tail `own_display_name` on `rpc_receive_authority_dungeon` + welcome `display_name`; 8 = tail `peer_display_names` dict on RPC + welcome + `rpc_peer_display_names_snapshot`; 9 = tail `listen_port`, `server_boot_unix_sec`, `party_peer_count` on RPC + welcome).
 const WELCOME_SCHEMA_VERSION := 9
@@ -150,6 +154,12 @@ var _server_level_up_waiting: Dictionary = {}
 var _server_combat_by_peer: Dictionary = {}
 ## CMB-02: per-peer serial bumped when scheduling delayed encounter; cleared on map transition; `erase` on disconnect.
 var _monster_combat_delay_serial_by_peer: Dictionary = {}
+## Server: stepped `rpc_request_path_move` — bump invalidates pending `SceneTreeTimer` callbacks (Explorer one `move_player` per tile).
+var _path_move_serial_by_peer: Dictionary = {}
+## Server: peer_id -> remaining `Vector2i` steps (king-adjacent cells to enter in order).
+var _path_move_queue_by_peer: Dictionary = {}
+## Server: peer_id -> locked door cell to open after the queue drains (Explorer path stops before door).
+var _path_move_door_after_by_peer: Dictionary = {}
 ## Fallback role in welcome if a peer never sends `rpc_client_join_request` in time.
 var _welcome_role_echo: String = "rogue"
 var _next_party_slot: int = 0
@@ -407,6 +417,9 @@ func configure_authority(
 	_torch_burn_by_peer.clear()
 	_torch_count_by_peer.clear()
 	_server_combat_by_peer.clear()
+	_path_move_serial_by_peer.clear()
+	_path_move_queue_by_peer.clear()
+	_path_move_door_after_by_peer.clear()
 	_treasure_trap_disarm_pending.clear()
 	_room_trap_disarm_pending.clear()
 	_server_rumor_xp_pending.clear()
@@ -3035,6 +3048,18 @@ func _monster_combat_ui_delay_sec() -> float:
 	return MONSTER_COMBAT_UI_DELAY_SEC
 
 
+func _path_move_step_delay_sec() -> float:
+	if path_move_step_sec_for_tests >= 0.0:
+		return path_move_step_sec_for_tests
+	return PATH_MOVE_STEP_SEC
+
+
+func _server_cancel_pending_path_move(peer_id: int) -> void:
+	_path_move_serial_by_peer[peer_id] = int(_path_move_serial_by_peer.get(peer_id, 0)) + 1
+	_path_move_queue_by_peer.erase(peer_id)
+	_path_move_door_after_by_peer.erase(peer_id)
+
+
 func _server_monster_combat_delay_serial_bump(mover_peer: int) -> int:
 	var nxt := int(_monster_combat_delay_serial_by_peer.get(mover_peer, 0)) + 1
 	_monster_combat_delay_serial_by_peer[mover_peer] = nxt
@@ -3104,6 +3129,7 @@ func _server_process_monster_turns_after_player(mover_peer: int) -> void:
 func _server_try_adjacent_move(sender: int, target: Vector2i) -> bool:
 	if not _player_positions.has(sender):
 		return false
+	_server_cancel_pending_path_move(sender)
 	var cur: Vector2i = _player_positions[sender]
 	if not GridWalk.is_king_adjacent(cur, target):
 		print(
@@ -4022,6 +4048,8 @@ func _server_regenerate_slice_for_welcome() -> Dictionary:
 
 func _server_apply_map_transition(kind: String, raw_tile: String) -> void:
 	_server_invalidate_monster_combat_delay_timers()
+	for pm_pid in _player_positions.keys():
+		_server_cancel_pending_path_move(int(pm_pid))
 	var plan_rng := RandomNumberGenerator.new()
 	plan_rng.randomize()
 	var plan: Dictionary = MapTransition.compute_transition(
@@ -4423,17 +4451,20 @@ func _server_handle_fog_square_click(sender: int, cell: Vector2i) -> void:
 		print("[Dungeoneers] fog_square_click ok peer_id=", sender, " cell=", cell)
 
 
-func _server_handle_path_move(sender: int, path: PackedVector2Array) -> void:
+## Validates a client path (fog sim only; torch ticks on real `_apply_authorized_move` per step). Returns
+## `steps` cells to walk in order, and optional `door_after` when the path stops before a locked door.
+func _server_validate_path_move_build(sender: int, path: PackedVector2Array) -> Dictionary:
+	var out: Dictionary = {"ok": false}
 	if not _player_positions.has(sender):
-		push_warning("[Dungeoneers] path move rejected: unknown peer_id=", sender)
-		return
+		return out
 	if path.is_empty():
-		return
+		return out
 	var cur: Vector2i = _player_positions[sender]
 	var sim_r: Dictionary = {}
 	for k in _revealed_for_peer(sender):
 		sim_r[k] = true
-
+	var steps: Array[Vector2i] = []
+	var door_after: Variant = null
 	for i in range(path.size()):
 		var target := Vector2i(int(path[i].x), int(path[i].y))
 		if not GridWalk.is_king_adjacent(cur, target):
@@ -4447,7 +4478,7 @@ func _server_handle_path_move(sender: int, path: PackedVector2Array) -> void:
 				" to=",
 				target
 			)
-			return
+			return out
 		if _fog_enabled and not DungeonFog.square_revealed(target, sim_r, true):
 			print(
 				"[Dungeoneers] path move rejected: fog peer_id=",
@@ -4457,13 +4488,11 @@ func _server_handle_path_move(sender: int, path: PackedVector2Array) -> void:
 				" to=",
 				target
 			)
-			return
+			return out
 		var step_tile: String = _authority_effective_tile(target)
 		if GridWalk.is_locked_door_tile(step_tile) and not _unlocked_doors.has(target):
-			## Explorer path: stop before stepping onto an unpicked locked door; open door flow.
-			_finish_path_move_after_steps(sender, cur, sim_r)
-			_server_handle_door_click(sender, target)
-			return
+			door_after = target
+			break
 		if not GridWalk.is_walkable_for_movement_at(
 			step_tile, target, _unlocked_doors, _authority_guards_hostile
 		):
@@ -4475,45 +4504,149 @@ func _server_handle_path_move(sender: int, path: PackedVector2Array) -> void:
 				" tile=",
 				step_tile
 			)
-			return
+			return out
 		if _cell_occupied_by_other(sender, target):
 			print("[Dungeoneers] path move rejected: occupied peer_id=", sender, " step=", i)
-			return
+			return out
+		steps.append(target)
 		cur = target
 		if _fog_enabled and _torch_should_expand_fog(sender):
 			var r_path: int = _move_fog_reveal_radius()
-			var disk_new_path: int = DungeonFog.count_new_disk_reveals(sim_r, target, r_path)
-			_server_award_exploration_xp_for_disk_new(sender, disk_new_path)
 			DungeonFog.reveal_chebyshev_disk_into(sim_r, target, r_path)
-		if _torch_tick_after_move(sender, cur):
-			for k2 in _revealed_for_peer(sender):
-				sim_r[k2] = true
-
-	var dst: Vector2i = cur
-	_finish_path_move_after_steps(sender, dst, sim_r)
+	out["ok"] = true
+	out["steps"] = steps
+	out["door_after"] = door_after
+	return out
 
 
-func _finish_path_move_after_steps(sender: int, dst: Vector2i, sim_r: Dictionary) -> void:
-	var real_r := _revealed_for_peer(sender)
-	var delta := PackedVector2Array()
-	for k in sim_r:
-		if not real_r.has(k):
-			real_r[k] = true
-			delta.append(Vector2(k))
-	if _fog_enabled and _torch_should_expand_fog(sender):
-		DungeonFog.append_area_label_cells_into_delta(
-			real_r, _authority_grid, dst, _authority_rooms, _authority_corridors, delta
-		)
-	_player_positions[sender] = dst
-	if _fog_enabled and not delta.is_empty():
-		_notify_client_fog_delta(sender, delta)
-	print("[Dungeoneers] path move accepted peer_id=", sender, " dst=", dst)
-	_notify_client_player_sync(sender, dst)
-	_server_maybe_post_move_traps(sender, dst)
-	_server_maybe_post_move_pickup(sender, dst)
-	_server_scan_secret_doors_after_move(sender, dst)
-	_server_process_monster_turns_after_player(sender)
-	_emit_stats_for_peer(sender)
+func _server_schedule_path_move_tick(sender: int, serial: int) -> void:
+	if not is_inside_tree():
+		return
+	var d := _path_move_step_delay_sec()
+	if d <= 0.0:
+		call_deferred("_server_path_move_tick", sender, serial)
+		return
+	var delay_timer := get_tree().create_timer(d, false, false)
+	delay_timer.timeout.connect(func() -> void: _server_path_move_tick(sender, serial))
+
+
+func _server_path_move_tick(sender: int, serial: int) -> void:
+	if not is_instance_valid(self):
+		return
+	if int(_path_move_serial_by_peer.get(sender, 0)) != serial:
+		return
+	if not _player_positions.has(sender):
+		return
+	if _server_combat_by_peer.has(sender):
+		_server_cancel_pending_path_move(sender)
+		return
+	var q: Variant = _path_move_queue_by_peer.get(sender, null)
+	if q == null or (q is Array and (q as Array).is_empty()):
+		if _path_move_door_after_by_peer.has(sender):
+			var dc: Vector2i = _path_move_door_after_by_peer[sender]
+			_path_move_door_after_by_peer.erase(sender)
+			_path_move_queue_by_peer.erase(sender)
+			_server_handle_door_click(sender, dc)
+		return
+	var arr: Array = q as Array
+	var raw0: Variant = arr[0]
+	var nxt: Vector2i
+	if raw0 is Vector2i:
+		nxt = raw0 as Vector2i
+	elif raw0 is Vector2:
+		var w0 := raw0 as Vector2
+		nxt = Vector2i(int(w0.x), int(w0.y))
+	else:
+		_server_cancel_pending_path_move(sender)
+		return
+	var cur: Vector2i = _player_positions[sender]
+	if not GridWalk.is_king_adjacent(cur, nxt):
+		print("[Dungeoneers] path move aborted: not adjacent peer_id=", sender)
+		_server_cancel_pending_path_move(sender)
+		return
+	var revealed: Dictionary = _revealed_for_peer(sender)
+	if _fog_enabled and not DungeonFog.square_revealed(nxt, revealed, true):
+		print("[Dungeoneers] path move aborted: fog peer_id=", sender)
+		_server_cancel_pending_path_move(sender)
+		return
+	var move_tile: String = _authority_effective_tile(nxt)
+	if not GridWalk.is_walkable_for_movement_at(
+		move_tile, nxt, _unlocked_doors, _authority_guards_hostile
+	):
+		print("[Dungeoneers] path move aborted: not walkable peer_id=", sender)
+		_server_cancel_pending_path_move(sender)
+		return
+	if _cell_occupied_by_other(sender, nxt):
+		print("[Dungeoneers] path move aborted: occupied peer_id=", sender)
+		_server_cancel_pending_path_move(sender)
+		return
+	arr.remove_at(0)
+	_apply_authorized_move(sender, nxt)
+	if _server_combat_by_peer.has(sender):
+		_server_cancel_pending_path_move(sender)
+		return
+	if arr.is_empty():
+		_path_move_queue_by_peer.erase(sender)
+		if _path_move_door_after_by_peer.has(sender):
+			var dc2: Vector2i = _path_move_door_after_by_peer[sender]
+			_path_move_door_after_by_peer.erase(sender)
+			_server_handle_door_click(sender, dc2)
+		return
+	_path_move_queue_by_peer[sender] = arr
+	_server_schedule_path_move_tick(sender, serial)
+
+
+func _server_begin_authorized_path_walk(
+	sender: int, all_steps: Array[Vector2i], door_after: Variant
+) -> void:
+	var serial := int(_path_move_serial_by_peer.get(sender, 0))
+	if all_steps.is_empty():
+		if door_after != null and door_after is Vector2i:
+			var d0 := door_after as Vector2i
+			print("[Dungeoneers] path move accepted peer_id=", sender, " steps=0 door=", d0)
+			_server_handle_door_click(sender, d0)
+		return
+	var rest: Array[Vector2i] = all_steps.duplicate()
+	var first: Vector2i = rest.pop_front()
+	_apply_authorized_move(sender, first)
+	if _server_combat_by_peer.has(sender):
+		_server_cancel_pending_path_move(sender)
+		return
+	if rest.is_empty():
+		if door_after != null and door_after is Vector2i:
+			_server_handle_door_click(sender, door_after as Vector2i)
+		print("[Dungeoneers] path move accepted peer_id=", sender, " dst=", first)
+		return
+	_path_move_queue_by_peer[sender] = rest
+	if door_after != null and door_after is Vector2i:
+		_path_move_door_after_by_peer[sender] = door_after as Vector2i
+	print("[Dungeoneers] path move accepted peer_id=", sender, " steps=", all_steps.size())
+	_server_schedule_path_move_tick(sender, serial)
+
+
+func _server_handle_path_move(sender: int, path: PackedVector2Array) -> void:
+	if not _player_positions.has(sender):
+		push_warning("[Dungeoneers] path move rejected: unknown peer_id=", sender)
+		return
+	if path.is_empty():
+		return
+	_server_cancel_pending_path_move(sender)
+	var built: Dictionary = _server_validate_path_move_build(sender, path)
+	if not bool(built.get("ok", false)):
+		return
+	var steps_raw: Variant = built.get("steps", null)
+	var steps: Array[Vector2i] = []
+	if steps_raw is Array:
+		for s in steps_raw as Array:
+			if s is Vector2i:
+				steps.append(s as Vector2i)
+			elif s is Vector2:
+				var v2 := s as Vector2
+				steps.append(Vector2i(int(v2.x), int(v2.y)))
+			else:
+				steps.append(Vector2i(int(s.x), int(s.y)))
+	var door_after: Variant = built.get("door_after", null)
+	_server_begin_authorized_path_walk(sender, steps, door_after)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -5567,6 +5700,8 @@ func _on_server_peer_disconnected(peer_id: int) -> void:
 	_server_level_hp_total_by_peer.erase(peer_id)
 	_server_level_up_queue_by_peer.erase(peer_id)
 	_server_level_up_waiting.erase(peer_id)
+	_server_cancel_pending_path_move(peer_id)
+	_path_move_serial_by_peer.erase(peer_id)
 	_player_positions.erase(peer_id)
 	_revealed_by_peer.erase(peer_id)
 	_clicked_fog_by_peer.erase(peer_id)
