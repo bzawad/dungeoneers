@@ -14,6 +14,7 @@ const GridWalk := preload("res://dungeon/movement/grid_walkability.gd")
 const PartyMarkerArt := preload("res://dungeon/ui/party_marker_art.gd")
 const EncounterMapToken := preload("res://dungeon/ui/encounter_map_token.gd")
 const MapCellOverlayArt := preload("res://dungeon/ui/map_cell_overlay_art.gd")
+const TorchFlickerFx := preload("res://dungeon/ui/torch_flicker_fx.gd")
 
 signal cell_clicked(cell: Vector2i)
 
@@ -341,6 +342,7 @@ func _sync_map_cell_overlays() -> void:
 			host.size = Vector2(float(_cell_px), float(_cell_px))
 			_map_cell_overlays_root.add_child(host)
 			_map_overlay_host_by_cell[cell2] = host
+		TorchFlickerFx.kill_tween(host)
 		for ch in host.get_children():
 			ch.queue_free()
 		for i in range(lays.size()):
@@ -360,6 +362,12 @@ func _sync_map_cell_overlays() -> void:
 			tex_rect.size = sz
 			tex_rect.z_index = zi
 			host.add_child(tex_rect)
+			if bool(d.get("torch_flicker", false)):
+				TorchFlickerFx.prepare_glow_rect(tex_rect)
+				tex_rect.texture = tex
+				tex_rect.modulate = Color(1.0, 0.78, 0.42, 0.68)
+				TorchFlickerFx.layout_cell_torch_underlay(tex_rect, _cell_px)
+				TorchFlickerFx.start_torch_flicker_tween(tex_rect, host)
 
 
 func _apply_generation_layer_modulate() -> void:
@@ -686,11 +694,56 @@ func clear_path_preview() -> void:
 	_path_preview_cells.clear()
 
 
+func _peer_marker_torch_lit(torch_burn_pct: int) -> bool:
+	return PartyMarkerArt.torch_lit_for_marker(_fog_type, torch_burn_pct, _fog_enabled)
+
+
+func _peer_marker_sprite_rect(marker: Control) -> TextureRect:
+	if marker == null:
+		return null
+	var n := marker.get_node_or_null("SpriteRect")
+	return n as TextureRect if n is TextureRect else null
+
+
+func _kill_marker_torch_flicker(marker: Node) -> void:
+	TorchFlickerFx.kill_tween(marker)
+
+
+func _layout_torch_glow(glow: Control, facing: int, side: float) -> void:
+	TorchFlickerFx.layout_player_torch_halo(glow, facing, side)
+
+
+func _start_marker_torch_flicker(marker: Control, glow: CanvasItem) -> void:
+	if glow == null or not is_instance_valid(glow):
+		return
+	TorchFlickerFx.start_torch_flicker_tween(glow, marker)
+
+
+func _apply_torch_glow(marker_root: Control, facing: int, side: float, lit: bool) -> void:
+	var glow := marker_root.get_node_or_null("TorchGlow") as TextureRect
+	if glow == null:
+		return
+	_kill_marker_torch_flicker(marker_root)
+	if not lit:
+		glow.visible = false
+		return
+	glow.visible = true
+	glow.modulate = Color(1.0, 0.78, 0.42, 0.72)
+	glow.scale = Vector2.ONE
+	_layout_torch_glow(glow, facing, side)
+	_start_marker_torch_flicker(marker_root, glow)
+
+
 func sync_peer_marker(
-	peer_id: int, cell: Vector2i, role: String = "rogue", display_label: String = ""
+	peer_id: int,
+	cell: Vector2i,
+	role: String = "rogue",
+	display_label: String = "",
+	torch_burn_pct: int = 100
 ) -> void:
 	if _players_root == null:
 		return
+	var torch_lit := _peer_marker_torch_lit(torch_burn_pct)
 	var prev: Variant = _peer_marker_last_cell.get(peer_id, null)
 	var facing: int = PartyMarkerArt.FACING_DOWN
 	if prev is Vector2i:
@@ -702,26 +755,25 @@ func sync_peer_marker(
 	_peer_marker_last_cell[peer_id] = cell
 	_peer_marker_last_facing[peer_id] = facing
 
-	var tex: Texture2D = PartyMarkerArt.texture_for_role_facing(role, facing)
+	var tex: Texture2D = PartyMarkerArt.texture_for_role_facing(role, facing, torch_lit)
 	if tex == null:
-		tex = PartyMarkerArt.texture_for_role(role)
+		tex = PartyMarkerArt.texture_for_role(role, torch_lit)
 	var want_tex := tex != null
 	var existing: Control = _peer_markers.get(peer_id) as Control
 	var need_rebuild := existing == null
-	if existing != null:
-		var was_tex := existing is TextureRect
+	if existing != null and existing is TextureRect:
+		need_rebuild = true
+	if existing != null and not need_rebuild:
+		var spr0 := _peer_marker_sprite_rect(existing)
+		var was_tex := spr0 != null
 		if want_tex != was_tex:
 			need_rebuild = true
 		elif str(existing.get_meta("marker_role", "")) != role:
 			need_rebuild = true
 		elif str(existing.get_meta("marker_label", "")) != display_label:
 			need_rebuild = true
-		elif want_tex and existing is TextureRect:
-			var tr_exist := existing as TextureRect
-			if tr_exist.texture != tex:
-				tr_exist.texture = tex
-			tr_exist.set_meta("marker_facing", facing)
 	if need_rebuild and existing != null:
+		_kill_marker_torch_flicker(existing)
 		existing.queue_free()
 		_peer_markers.erase(peer_id)
 		existing = null
@@ -729,19 +781,38 @@ func sync_peer_marker(
 	var r: Control
 	if existing == null:
 		if want_tex:
+			var root := Control.new()
+			root.name = "PlayerMarker_%d" % peer_id
+			root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			root.z_index = 1 if peer_id == _local_peer_id else 0
+			root.set_meta("marker_role", role)
+			root.set_meta("marker_label", display_label)
+			root.set_meta("marker_facing", facing)
+			root.set_meta("marker_torch_burn", torch_burn_pct)
+			root.set_meta("marker_facing", facing)
+			var glow := TextureRect.new()
+			glow.name = "TorchGlow"
+			glow.visible = false
+			glow.z_index = 0
+			TorchFlickerFx.prepare_glow_rect(glow)
+			root.add_child(glow)
 			var marker_rect := TextureRect.new()
-			marker_rect.name = "PlayerMarker_%d" % peer_id
+			marker_rect.name = "SpriteRect"
 			marker_rect.set_meta("marker_role", role)
-			marker_rect.set_meta("marker_label", display_label)
-			marker_rect.set_meta("marker_facing", facing)
 			marker_rect.texture = tex
 			marker_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			marker_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			marker_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			marker_rect.z_index = 1 if peer_id == _local_peer_id else 0
-			_players_root.add_child(marker_rect)
-			_peer_markers[peer_id] = marker_rect
-			r = marker_rect
+			marker_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+			marker_rect.offset_left = 0.0
+			marker_rect.offset_top = 0.0
+			marker_rect.offset_right = 0.0
+			marker_rect.offset_bottom = 0.0
+			marker_rect.z_index = 1
+			root.add_child(marker_rect)
+			_players_root.add_child(root)
+			_peer_markers[peer_id] = root
+			r = root
 		else:
 			var p := Panel.new()
 			p.name = "PlayerMarker_%d" % peer_id
@@ -759,18 +830,25 @@ func sync_peer_marker(
 	else:
 		r = existing
 		r.set_meta("marker_label", display_label)
+		r.set_meta("marker_torch_burn", torch_burn_pct)
+		r.set_meta("marker_facing", facing)
+		var spr_upd := _peer_marker_sprite_rect(r)
+		if spr_upd != null and want_tex:
+			spr_upd.set_meta("marker_role", role)
+			if tex != null:
+				spr_upd.texture = tex
 
 	var inset := _cell_px * 0.1
 	var side := _cell_px - 2.0 * inset
 	var target_pos := Vector2(cell.x * _cell_px + inset, cell.y * _cell_px + inset)
 	var target_size := Vector2(side, side)
 
-	if r is TextureRect:
-		var tr2 := r as TextureRect
+	var spr := _peer_marker_sprite_rect(r)
+	if spr != null:
 		if peer_id == _local_peer_id:
-			tr2.modulate = Color(0.88, 1.0, 0.92, 1.0)
+			spr.modulate = Color(0.88, 1.0, 0.92, 1.0)
 		else:
-			tr2.modulate = Color(1.0, 0.94, 0.82, 1.0)
+			spr.modulate = Color(1.0, 0.94, 0.82, 1.0)
 	elif r is Panel:
 		var rad := int(side * 0.5)
 		var sb2 := r.get_theme_stylebox("panel") as StyleBoxFlat
@@ -787,37 +865,43 @@ func sync_peer_marker(
 				sb2.border_color = Color(1.0, 0.95, 0.7, 0.95)
 
 	if r.position.distance_to(target_pos) > 0.5 and is_inside_tree():
+		if spr != null:
+			_apply_torch_glow(r, facing, side, torch_lit)
 		var tw := create_tween()
 		tw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tw.tween_property(r, "position", target_pos, 0.12)
 		tw.parallel().tween_property(r, "size", target_size, 0.12)
-		if r is TextureRect:
-			var tr_move := r as TextureRect
-			var disp := PartyMarkerArt.make_walk_display_texture(role, facing)
+		if spr != null:
+			var disp := PartyMarkerArt.make_walk_display_texture(role, facing, torch_lit)
 			if disp != null:
-				tr_move.texture = disp
+				spr.texture = disp
 		tw.finished.connect(
 			func() -> void:
-				if is_instance_valid(r) and r is TextureRect:
-					var tr_done := r as TextureRect
-					var fr_done := int(
-						tr_done.get_meta("marker_facing", PartyMarkerArt.FACING_DOWN)
+				if not is_instance_valid(r):
+					return
+				var spr_done := _peer_marker_sprite_rect(r)
+				if spr_done != null:
+					var fr_done := int(r.get_meta("marker_facing", PartyMarkerArt.FACING_DOWN))
+					var rl_done := str(r.get_meta("marker_role", role))
+					var burn_done := int(r.get_meta("marker_torch_burn", torch_burn_pct))
+					var lit_done := _peer_marker_torch_lit(burn_done)
+					var st_done := PartyMarkerArt.texture_for_role_facing(
+						rl_done, fr_done, lit_done
 					)
-					var rl_done := str(tr_done.get_meta("marker_role", role))
-					var st_done := PartyMarkerArt.texture_for_role_facing(rl_done, fr_done)
 					if st_done == null:
-						st_done = PartyMarkerArt.texture_for_role(rl_done)
+						st_done = PartyMarkerArt.texture_for_role(rl_done, lit_done)
 					if st_done != null:
-						tr_done.texture = st_done
+						spr_done.texture = st_done
+					_apply_torch_glow(r, fr_done, r.size.x, lit_done)
 				_update_peer_marker_name_label(r, display_label, r.size)
 		)
 	else:
 		r.position = target_pos
 		r.size = target_size
-		if r is TextureRect and want_tex:
-			var tr_snap := r as TextureRect
-			if tex != null:
-				tr_snap.texture = tex
+		if spr != null and want_tex and tex != null:
+			spr.texture = tex
+		if spr != null:
+			_apply_torch_glow(r, facing, side, torch_lit)
 	_update_peer_marker_name_label(r, display_label, target_size)
 
 	if _follow_local_camera and peer_id == _local_peer_id and _camera_for_fit != null:

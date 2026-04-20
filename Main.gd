@@ -8,6 +8,8 @@ const MAX_CLIENTS := 8
 
 const DungeonSession := preload("res://dungeon/ui/dungeon_session.gd")
 const TraditionalGen := preload("res://dungeon/generator/traditional_generator.gd")
+const DungeonGenerator := preload("res://dungeon/generator/dungeon_generator.gd")
+const DungeonThemes := preload("res://dungeon/generator/dungeon_themes.gd")
 const DungeonReplication := preload("res://dungeon/network/dungeon_replication.gd")
 const DungeonNetworkHost := preload("res://dungeon/network/dungeon_network_host.gd")
 
@@ -54,6 +56,7 @@ func _run_mode(args: PackedStringArray) -> void:
 	var fog_enabled := true
 	var fog_radius := -1
 	var fog_type_cli := ""
+	var theme_name_cli := ""
 	var torch_reveals := true
 	var debug_net := false
 
@@ -86,6 +89,10 @@ func _run_mode(args: PackedStringArray) -> void:
 			"--theme":
 				if i + 1 < args.size():
 					dungeon_theme = String(args[i + 1])
+					i += 1
+			"--theme-name":
+				if i + 1 < args.size():
+					theme_name_cli = String(args[i + 1])
 					i += 1
 			"--server-exit-after":
 				if i + 1 < args.size():
@@ -203,7 +210,8 @@ func _run_mode(args: PackedStringArray) -> void:
 					fog_enabled,
 					fog_radius,
 					fog_type_cli,
-					torch_reveals
+					torch_reveals,
+					theme_name_cli
 				)
 		_:
 			if not headless:
@@ -215,7 +223,8 @@ func _run_mode(args: PackedStringArray) -> void:
 					fog_enabled,
 					fog_radius,
 					fog_type_cli,
-					torch_reveals
+					torch_reveals,
+					theme_name_cli
 				)
 			else:
 				print(
@@ -232,7 +241,8 @@ func _start_local_dungeon(
 	fog_enabled: bool,
 	fog_radius_override: int,
 	fog_type_cli: String,
-	torch_reveals_moves: bool
+	torch_reveals_moves: bool,
+	theme_name_arg: String = ""
 ) -> void:
 	var theme_norm := theme
 	if theme_norm != "up" and theme_norm != "down":
@@ -244,7 +254,19 @@ func _start_local_dungeon(
 		chosen_seed = randi()
 	s_rng.seed = chosen_seed
 
-	var authority: Dictionary = TraditionalGen.generate(s_rng, theme_norm)
+	var authority: Dictionary
+	if not theme_name_arg.strip_edges().is_empty():
+		DungeonThemes.load_themes()
+		var theme_data: Dictionary = DungeonThemes.find_theme_by_name(theme_name_arg.strip_edges())
+		if theme_data.is_empty():
+			push_error("[Dungeoneers] unknown --theme-name: ", theme_name_arg)
+			get_tree().quit(1)
+			return
+		authority = DungeonGenerator.generate_with_theme_data(s_rng, theme_data, 1, 1)
+		var ddir := str(theme_data.get("direction", "up")).strip_edges()
+		theme_norm = ddir if (ddir == "up" or ddir == "down") else "up"
+	else:
+		authority = TraditionalGen.generate(s_rng, theme_norm)
 	var checksum := TraditionalGen.grid_checksum(authority["grid"])
 	var gen_meta := {
 		"theme_name": str(authority.get("theme", "")),
@@ -252,6 +274,7 @@ func _start_local_dungeon(
 		"generation_type": str(authority.get("generation_type", "dungeon")),
 		"rooms": authority.get("rooms", []),
 		"corridors": authority.get("corridors", []),
+		"fog_type": str(authority.get("fog_type", "")),
 	}
 
 	var rep: Node = _add_dungeon_replication()

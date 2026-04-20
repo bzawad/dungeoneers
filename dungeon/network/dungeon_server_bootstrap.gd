@@ -57,6 +57,7 @@ static func start_stub_server_on(
 		"generation_type": str(authority.get("generation_type", "dungeon")),
 		"rooms": authority.get("rooms", []),
 		"corridors": authority.get("corridors", []),
+		"fog_type": str(authority.get("fog_type", "")),
 	}
 	var log_fog_type := str(authority.get("fog_type", "dark"))
 	if not fog_type_cli.strip_edges().is_empty():

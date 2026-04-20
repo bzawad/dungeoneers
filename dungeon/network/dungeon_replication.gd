@@ -55,7 +55,7 @@ signal server_world_meta_changed(
 	connected_client_count: int
 )
 signal authority_dungeon_failed(reason: String)
-signal player_position_updated(peer_id: int, cell: Vector2i, role: String)
+signal player_position_updated(peer_id: int, cell: Vector2i, role: String, torch_burn_pct: int)
 signal fog_reveal_delta(cells: PackedVector2Array)
 ## Full replace of revealed cells (torch expired / server resync).
 signal fog_full_resync(cells: PackedVector2Array)
@@ -373,7 +373,11 @@ func configure_authority(
 	_server_level_up_waiting.clear()
 	_fog_enabled = fog_enabled
 	if fog_type_arg.strip_edges().is_empty():
-		_fog_type = TraditionalGen.fog_type_for_theme_direction(theme)
+		var meta_ft := str(generation_meta.get("fog_type", "")).strip_edges()
+		if not meta_ft.is_empty():
+			_fog_type = DungeonFog.normalize_fog_type(meta_ft)
+		else:
+			_fog_type = TraditionalGen.fog_type_for_theme_direction(theme)
 	else:
 		_fog_type = DungeonFog.normalize_fog_type(fog_type_arg)
 	if fog_radius_override >= 0:
@@ -448,11 +452,12 @@ func _notify_client_fog_delta(peer_id: int, delta: PackedVector2Array) -> void:
 
 func _notify_client_player_sync(peer_id: int, cell: Vector2i) -> void:
 	var role_s := str(_peer_roles.get(peer_id, "rogue"))
+	var burn := _torch_burn_value(peer_id)
 	if _using_solo_local() and peer_id == _solo_offline_peer:
 		_client_spawn_cell = cell
-		player_position_updated.emit(peer_id, cell, role_s)
+		player_position_updated.emit(peer_id, cell, role_s, burn)
 	elif multiplayer.multiplayer_peer != null and multiplayer.is_server():
-		rpc_player_position_sync.rpc(peer_id, cell.x, cell.y, role_s)
+		rpc_player_position_sync.rpc(peer_id, cell.x, cell.y, role_s, burn)
 
 
 func _notify_unlocked_doors_delta(cells: PackedVector2Array) -> void:
@@ -637,7 +642,9 @@ func begin_solo_local_session(join_role: String, solo_display_name: String = "")
 	)
 	authority_dungeon_synchronized.emit(_authority_seed, theme_norm, grid, welcome)
 	guards_hostile_changed.emit(_authority_guards_hostile)
-	player_position_updated.emit(_solo_offline_peer, spawn, norm)
+	player_position_updated.emit(
+		_solo_offline_peer, spawn, norm, _torch_burn_value(_solo_offline_peer)
+	)
 	_authority_recompute_player_level_from_party_xp()
 	var th0 := _torch_hud_burn_and_spares_for_peer(_solo_offline_peer)
 	var sx0 := int(_server_xp.get(_solo_offline_peer, 0))
@@ -1522,6 +1529,24 @@ func _server_maybe_post_move_traps(peer_id: int, dst: Vector2i) -> void:
 		if (not _fog_enabled) or DungeonFog.square_revealed(dst, revealed_m, true):
 			_server_handle_trapped_treasure_interaction(peer_id, dst)
 		return
+	if raw_dst == "treasure":
+		if (not _fog_enabled) or DungeonFog.square_revealed(dst, revealed_m, true):
+			var eff_tr: String = _authority_effective_tile(dst)
+			var pack_tr: Dictionary = _world_interaction_payload("treasure", raw_dst, eff_tr, dst)
+			_deliver_world_interaction_to_peer(
+				peer_id,
+				"treasure",
+				dst,
+				str(pack_tr["title"]),
+				str(pack_tr["message"]),
+			)
+			print(
+				"[Dungeoneers] post_move_treasure peer_id=",
+				peer_id,
+				" cell=",
+				dst,
+			)
+		return
 	if raw_dst == "room_trap":
 		if (not _fog_enabled) or DungeonFog.square_revealed(dst, revealed_m, true):
 			_server_handle_room_trap_interaction(peer_id, dst)
@@ -1703,6 +1728,17 @@ func _server_encounter_cell_ok(sender: int, cell: Vector2i) -> bool:
 	if GridWalk.world_interaction_remote_kind(eff) != "encounter":
 		print(
 			"[Dungeoneers] encounter rejected: not encounter tile peer_id=", sender, " cell=", cell
+		)
+		return false
+	var pos_e: Vector2i = _player_positions[sender]
+	if pos_e != cell and not GridWalk.is_king_adjacent(pos_e, cell):
+		print(
+			"[Dungeoneers] encounter rejected: not adjacent peer_id=",
+			sender,
+			" player=",
+			pos_e,
+			" cell=",
+			cell,
 		)
 		return false
 	return true
@@ -2101,43 +2137,113 @@ func run_headless_door_unlock_probe() -> void:
 	print("[Dungeoneers] door_unlock_probe skipped (no adjacent locked door from spawn)")
 
 
-## Headless: with `--no-fog`, pick first encounter cell on the grid and send one world-interaction RPC.
+## Headless helper: walkable king-neighbor of [target] reachable from [spawn] (Explorer encounter click).
+func _headless_first_reachable_king_neighbor(
+	grid: Dictionary, spawn: Vector2i, target: Vector2i
+) -> Vector2i:
+	var offs: Array[Vector2i] = [
+		Vector2i(-1, -1),
+		Vector2i(0, -1),
+		Vector2i(1, -1),
+		Vector2i(-1, 0),
+		Vector2i(1, 0),
+		Vector2i(-1, 1),
+		Vector2i(0, 1),
+		Vector2i(1, 1),
+	]
+	for d: Vector2i in offs:
+		var s: Vector2i = target + d
+		var t_eff: String = GridWalk.tile_effective(grid, s, _client_trap_defused)
+		if not GridWalk.is_walkable_for_pathfinding_at(
+			t_eff, s, _client_unlocked_doors, _client_guards_hostile
+		):
+			continue
+		var pth := GridPath.find_path_8dir(
+			grid,
+			spawn,
+			s,
+			_client_revealed,
+			_fog_enabled,
+			_client_unlocked_doors,
+			_client_trap_defused,
+			_client_guards_hostile
+		)
+		if not pth.is_empty():
+			return s
+	return Vector2i(-1, -1)
+
+
+## Headless: path beside encounter, then `world_interaction` (Explorer adjacent encounter click).
 func run_headless_world_interaction_probe() -> void:
 	if multiplayer.is_server():
 		return
 	await get_tree().process_frame
-	var grid := _authority_grid_ref_for_client()
+	var grid_wi: Dictionary = _authority_grid_ref_for_client()
+	var spawn_wi: Vector2i = _client_spawn_cell
 	for y in range(DungeonGrid.MAP_HEIGHT):
 		for x in range(DungeonGrid.MAP_WIDTH):
-			var c := Vector2i(x, y)
-			var raw: String = GridWalk.tile_at(grid, c)
-			if GridWalk.world_interaction_remote_kind(raw) == "encounter":
-				client_request_world_interaction(c.x, c.y)
-				## Allow ENet to flush before headless client closes (move probe has more awaits between RPCs).
-				for _i in range(12):
+			var enc := Vector2i(x, y)
+			var raw_enc: String = GridWalk.tile_at(grid_wi, enc)
+			if GridWalk.world_interaction_remote_kind(raw_enc) != "encounter":
+				continue
+			var stand_wi: Vector2i = _headless_first_reachable_king_neighbor(grid_wi, spawn_wi, enc)
+			if stand_wi.x < 0:
+				continue
+			if stand_wi != spawn_wi:
+				var path_wi := GridPath.find_path_8dir(
+					grid_wi,
+					spawn_wi,
+					stand_wi,
+					_client_revealed,
+					_fog_enabled,
+					_client_unlocked_doors,
+					_client_trap_defused,
+					_client_guards_hostile
+				)
+				if path_wi.is_empty():
+					continue
+				client_request_path_move(path_wi)
+				for _pw in range(36):
 					await get_tree().process_frame
-				return
+			client_request_world_interaction(enc.x, enc.y)
+			for _i in range(12):
+				await get_tree().process_frame
+			return
 	print("[Dungeoneers] world_interaction_probe skipped (no encounter tile on grid)")
 
 
-## Headless: `--no-fog`, first `treasure` cell → world interaction + treasure dismiss RPCs.
+## Headless: path onto first `treasure` cell, then dismiss (Explorer step-to-loot).
 func run_headless_treasure_probe() -> void:
 	if multiplayer.is_server():
 		return
 	await get_tree().process_frame
-	var grid := _authority_grid_ref_for_client()
+	var grid_tr: Dictionary = _authority_grid_ref_for_client()
+	var spawn_tr: Vector2i = _client_spawn_cell
 	for y in range(DungeonGrid.MAP_HEIGHT):
 		for x in range(DungeonGrid.MAP_WIDTH):
 			var c := Vector2i(x, y)
-			var raw: String = GridWalk.tile_at(grid, c)
-			if raw == "treasure":
-				client_request_world_interaction(c.x, c.y)
-				for _i in range(4):
-					await get_tree().process_frame
-				client_request_treasure_dismiss(c.x, c.y)
-				for _j in range(12):
-					await get_tree().process_frame
-				return
+			var raw: String = GridWalk.tile_at(grid_tr, c)
+			if raw != "treasure":
+				continue
+			var path_tr := GridPath.find_path_8dir(
+				grid_tr,
+				spawn_tr,
+				c,
+				_client_revealed,
+				_fog_enabled,
+				_client_unlocked_doors,
+				_client_trap_defused,
+				_client_guards_hostile
+			)
+			if path_tr.is_empty():
+				continue
+			client_request_path_move(path_tr)
+			for _i in range(36):
+				await get_tree().process_frame
+			client_request_treasure_dismiss(c.x, c.y)
+			for _j in range(12):
+				await get_tree().process_frame
+			return
 	print("[Dungeoneers] treasure_probe skipped (no plain treasure tile on grid)")
 
 
@@ -2220,7 +2326,7 @@ func run_headless_pickup_probe() -> void:
 	)
 
 
-## Headless: `--no-fog`, first `trapped_treasure` cell → world interaction then resolve trap flow + loot.
+## Headless: path onto first `trapped_treasure` cell, then resolve trap flow + loot (Explorer step-to-interact).
 func run_headless_trapped_treasure_probe() -> void:
 	if multiplayer.is_server():
 		return
@@ -2239,15 +2345,35 @@ func run_headless_trapped_treasure_probe() -> void:
 	if pick_tt.x < 0:
 		print("[Dungeoneers] trapped_treasure_probe skipped (no trapped_treasure tile on grid)")
 		return
-	var phase_tt: Array[String] = ["wi"]
+	var spawn_tt: Vector2i = _client_spawn_cell
+	var path_tt := GridPath.find_path_8dir(
+		grid_tt,
+		spawn_tt,
+		pick_tt,
+		_client_revealed,
+		_fog_enabled,
+		_client_unlocked_doors,
+		_client_trap_defused,
+		_client_guards_hostile
+	)
+	if path_tt.is_empty():
+		print(
+			"[Dungeoneers] trapped_treasure_probe skipped (no path spawn=",
+			spawn_tt,
+			" to trapped_treasure=",
+			pick_tt,
+			")"
+		)
+		return
+	var phase_tt: Array[String] = ["move"]
 
 	var on_world_tt := func(kind: String, cell: Vector2i, _t: String, _m: String) -> void:
 		if cell != pick_tt:
 			return
-		if phase_tt[0] == "wi" and kind == "trapped_treasure_undetected":
+		if phase_tt[0] == "move" and kind == "trapped_treasure_undetected":
 			phase_tt[0] = "ack"
 			client_request_trapped_treasure_undetected_ack(cell.x, cell.y)
-		elif phase_tt[0] == "wi" and kind == "trapped_treasure_detected":
+		elif phase_tt[0] == "move" and kind == "trapped_treasure_detected":
 			phase_tt[0] = "disarm"
 			client_request_trapped_treasure_disarm(cell.x, cell.y)
 		elif phase_tt[0] == "ack" and kind == "treasure":
@@ -2258,8 +2384,8 @@ func run_headless_trapped_treasure_probe() -> void:
 			client_request_treasure_dismiss(cell.x, cell.y)
 
 	world_interaction_offered.connect(on_world_tt)
-	client_request_world_interaction(pick_tt.x, pick_tt.y)
-	for _f_tt in range(24):
+	client_request_path_move(path_tt)
+	for _f_tt in range(48):
 		await get_tree().process_frame
 	if world_interaction_offered.is_connected(on_world_tt):
 		world_interaction_offered.disconnect(on_world_tt)
@@ -2425,16 +2551,39 @@ func run_headless_encounter_probe() -> void:
 	if multiplayer.is_server():
 		return
 	await get_tree().process_frame
-	var grid := _authority_grid_ref_for_client()
+	var grid_ev: Dictionary = _authority_grid_ref_for_client()
+	var spawn_ev: Vector2i = _client_spawn_cell
 	for y in range(DungeonGrid.MAP_HEIGHT):
 		for x in range(DungeonGrid.MAP_WIDTH):
-			var c := Vector2i(x, y)
-			var raw: String = GridWalk.tile_at(grid, c)
-			if GridWalk.world_interaction_remote_kind(raw) == "encounter":
-				client_request_encounter_evade(c.x, c.y)
-				for _i in range(12):
+			var c_ev := Vector2i(x, y)
+			var raw_ev: String = GridWalk.tile_at(grid_ev, c_ev)
+			if GridWalk.world_interaction_remote_kind(raw_ev) != "encounter":
+				continue
+			var stand_ev: Vector2i = _headless_first_reachable_king_neighbor(
+				grid_ev, spawn_ev, c_ev
+			)
+			if stand_ev.x < 0:
+				continue
+			if stand_ev != spawn_ev:
+				var path_ev := GridPath.find_path_8dir(
+					grid_ev,
+					spawn_ev,
+					stand_ev,
+					_client_revealed,
+					_fog_enabled,
+					_client_unlocked_doors,
+					_client_trap_defused,
+					_client_guards_hostile
+				)
+				if path_ev.is_empty():
+					continue
+				client_request_path_move(path_ev)
+				for _pe in range(36):
 					await get_tree().process_frame
-				return
+			client_request_encounter_evade(c_ev.x, c_ev.y)
+			for _i in range(12):
+				await get_tree().process_frame
+			return
 	print("[Dungeoneers] encounter_probe skipped (no encounter tile on grid)")
 
 
@@ -2443,28 +2592,51 @@ func run_headless_combat_probe() -> void:
 	if multiplayer.is_server():
 		return
 	await get_tree().process_frame
-	var grid := _authority_grid_ref_for_client()
+	var grid_cb: Dictionary = _authority_grid_ref_for_client()
+	var spawn_cb: Vector2i = _client_spawn_cell
 	for y in range(DungeonGrid.MAP_HEIGHT):
 		for x in range(DungeonGrid.MAP_WIDTH):
-			var c := Vector2i(x, y)
-			var raw: String = GridWalk.tile_at(grid, c)
-			if GridWalk.world_interaction_remote_kind(raw) == "encounter":
-				client_request_encounter_fight(c.x, c.y)
-				for _wait in range(8):
+			var c_cb := Vector2i(x, y)
+			var raw_cb: String = GridWalk.tile_at(grid_cb, c_cb)
+			if GridWalk.world_interaction_remote_kind(raw_cb) != "encounter":
+				continue
+			var stand_cb: Vector2i = _headless_first_reachable_king_neighbor(
+				grid_cb, spawn_cb, c_cb
+			)
+			if stand_cb.x < 0:
+				continue
+			if stand_cb != spawn_cb:
+				var path_cb := GridPath.find_path_8dir(
+					grid_cb,
+					spawn_cb,
+					stand_cb,
+					_client_revealed,
+					_fog_enabled,
+					_client_unlocked_doors,
+					_client_trap_defused,
+					_client_guards_hostile
+				)
+				if path_cb.is_empty():
+					continue
+				client_request_path_move(path_cb)
+				for _pcb in range(36):
 					await get_tree().process_frame
-				var attacks := 0
-				while attacks < 400:
-					await get_tree().process_frame
-					var snap: Dictionary = _last_combat_snapshot
-					if bool(snap.get("finished", false)):
-						return
-					if bool(snap.get("can_attack", false)):
-						client_request_combat_player_attack()
-						attacks += 1
-					elif snap.is_empty():
-						pass
-				push_error("[Dungeoneers] combat_probe timed out (no finished snapshot)")
-				return
+			client_request_encounter_fight(c_cb.x, c_cb.y)
+			for _wait in range(8):
+				await get_tree().process_frame
+			var attacks := 0
+			while attacks < 400:
+				await get_tree().process_frame
+				var snap: Dictionary = _last_combat_snapshot
+				if bool(snap.get("finished", false)):
+					return
+				if bool(snap.get("can_attack", false)):
+					client_request_combat_player_attack()
+					attacks += 1
+				elif snap.is_empty():
+					pass
+			push_error("[Dungeoneers] combat_probe timed out (no finished snapshot)")
+			return
 	print("[Dungeoneers] combat_probe skipped (no encounter tile on grid)")
 
 
@@ -2473,24 +2645,55 @@ func run_headless_labels_probe() -> void:
 	if multiplayer.is_server():
 		return
 	await get_tree().process_frame
-	var grid := _authority_grid_ref_for_client()
-	var want_kinds: Array[String] = [
+	var grid_lb: Dictionary = _authority_grid_ref_for_client()
+	var spawn_lb: Vector2i = _client_spawn_cell
+	## Explorer `clickable_label_tile?` excludes `area_label`. Labels: remote WI when spawn is not
+	## king-adjacent to the label. Special features: path to an adjacent stand cell, then WI.
+	var want_kinds_lb: Array[String] = [
 		"room_label",
 		"corridor_label",
 		"special_feature",
-		"area_label",
 		"building_label",
 	]
-	for want in want_kinds:
+	for want_lb in want_kinds_lb:
 		for y in range(DungeonGrid.MAP_HEIGHT):
 			for x in range(DungeonGrid.MAP_WIDTH):
-				var c := Vector2i(x, y)
-				var raw: String = GridWalk.tile_at(grid, c)
-				if GridWalk.world_interaction_remote_kind(raw) == want:
-					client_request_world_interaction(c.x, c.y)
+				var c_lb := Vector2i(x, y)
+				var raw_lb: String = GridWalk.tile_at(grid_lb, c_lb)
+				if GridWalk.world_interaction_remote_kind(raw_lb) != want_lb:
+					continue
+				if want_lb == "special_feature":
+					var stand_lb: Vector2i = _headless_first_reachable_king_neighbor(
+						grid_lb, spawn_lb, c_lb
+					)
+					if stand_lb.x < 0:
+						continue
+					if stand_lb != spawn_lb:
+						var path_lb := GridPath.find_path_8dir(
+							grid_lb,
+							spawn_lb,
+							stand_lb,
+							_client_revealed,
+							_fog_enabled,
+							_client_unlocked_doors,
+							_client_trap_defused,
+							_client_guards_hostile
+						)
+						if path_lb.is_empty():
+							continue
+						client_request_path_move(path_lb)
+						for _plb in range(36):
+							await get_tree().process_frame
+					client_request_world_interaction(c_lb.x, c_lb.y)
 					for _i in range(12):
 						await get_tree().process_frame
 					return
+				if GridWalk.is_king_adjacent(spawn_lb, c_lb):
+					continue
+				client_request_world_interaction(c_lb.x, c_lb.y)
+				for _i in range(12):
+					await get_tree().process_frame
+				return
 	print("[Dungeoneers] labels_probe skipped (no label or special_feature tile on grid)")
 
 
@@ -3508,6 +3711,17 @@ func _server_handle_feature_investigate(sender: int, cell: Vector2i) -> void:
 	var rev_f: Dictionary = _revealed_for_peer(sender)
 	if _fog_enabled and not DungeonFog.square_revealed(cell, rev_f, true):
 		return
+	var pos_f: Vector2i = _player_positions[sender]
+	if pos_f != cell and not GridWalk.is_king_adjacent(pos_f, cell):
+		print(
+			"[Dungeoneers] feature_investigate rejected: not adjacent peer_id=",
+			sender,
+			" player=",
+			pos_f,
+			" cell=",
+			cell,
+		)
+		return
 	var raw_f: String = GridWalk.tile_at(_authority_grid, cell)
 	if not raw_f.begins_with("special_feature|"):
 		print("[Dungeoneers] feature_investigate rejected: not special_feature cell=", cell)
@@ -3687,6 +3901,18 @@ func _server_handle_world_interaction(sender: int, cell: Vector2i) -> void:
 		return
 	var remote_kind := GridWalk.world_interaction_remote_kind(eff_tile)
 	if remote_kind != "":
+		if not GridWalk.should_remote_world_interaction_click(
+			_player_positions[sender], cell, remote_kind
+		):
+			print(
+				"[Dungeoneers] world_interaction rejected: Explorer click routing peer_id=",
+				sender,
+				" cell=",
+				cell,
+				" kind=",
+				remote_kind
+			)
+			return
 		if remote_kind == "trapped_treasure":
 			_server_handle_trapped_treasure_interaction(sender, cell)
 			print(
@@ -3899,7 +4125,10 @@ func _server_apply_map_transition(kind: String, raw_tile: String) -> void:
 		}
 		authority_dungeon_synchronized.emit(_authority_seed, _authority_theme, new_grid, wel)
 		player_position_updated.emit(
-			_solo_offline_peer, solo_cell, str(_peer_roles.get(_solo_offline_peer, "rogue"))
+			_solo_offline_peer,
+			solo_cell,
+			str(_peer_roles.get(_solo_offline_peer, "rogue")),
+			_torch_burn_value(_solo_offline_peer)
 		)
 		_emit_stats_for_peer(_solo_offline_peer)
 		_server_broadcast_special_items_to_peer(_solo_offline_peer)
@@ -5224,11 +5453,13 @@ func rpc_secret_doors_snapshot(cells: PackedVector2Array) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func rpc_player_position_sync(peer_id: int, x: int, y: int, role: String = "rogue") -> void:
+func rpc_player_position_sync(
+	peer_id: int, x: int, y: int, role: String = "rogue", torch_burn_pct: int = TORCH_BURN_FULL
+) -> void:
 	var cell := Vector2i(x, y)
 	if not multiplayer.is_server() and peer_id == multiplayer.get_unique_id():
 		_client_spawn_cell = cell
-	player_position_updated.emit(peer_id, cell, role)
+	player_position_updated.emit(peer_id, cell, role, torch_burn_pct)
 
 
 func _on_server_peer_connected(peer_id: int) -> void:
@@ -5352,7 +5583,7 @@ func _broadcast_all_positions() -> void:
 		var c: Vector2i = _player_positions[pid]
 		var rid := int(pid)
 		var rrole := str(_peer_roles.get(rid, "rogue"))
-		rpc_player_position_sync.rpc(rid, c.x, c.y, rrole)
+		rpc_player_position_sync.rpc(rid, c.x, c.y, rrole, _torch_burn_value(rid))
 
 
 @rpc("authority", "call_remote", "reliable")

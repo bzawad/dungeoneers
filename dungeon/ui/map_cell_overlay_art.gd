@@ -4,6 +4,8 @@ extends RefCounted
 ## `Dungeon.Generator.Features.get_special_feature_image_path/1` and static `/images/*.png` icons.
 
 const DungeonFog := preload("res://dungeon/fog/fog_of_war.gd")
+const GenFeat := preload("res://dungeon/generator/generator_features.gd")
+const TorchFlickerFx := preload("res://dungeon/ui/torch_flicker_fx.gd")
 
 const _REGISTRY_JSON := "res://dungeon/data/special_feature_registry.json"
 const _IMAGES := "res://assets/explorer/images/"
@@ -110,6 +112,27 @@ static func _link_big_px(cell_px: int) -> int:
 	return maxi(cell_px, int(round(96.0 * float(cell_px) / 48.0)))
 
 
+## Explorer `map_template.ex`: amber halo behind torch / light-emitting special features.
+static func _append_torch_flicker_layer(out: Array, cell_px: int) -> void:
+	var gt: Texture2D = TorchFlickerFx.glow_texture()
+	if gt == null:
+		return
+	var h := float(cell_px) * 1.22
+	var off := (float(cell_px) - h) * 0.5
+	(
+		out
+		. append(
+			{
+				"texture": gt,
+				"px": Vector2(off, off),
+				"size": Vector2(h, h),
+				"z": -1,
+				"torch_flicker": true,
+			}
+		)
+	)
+
+
 ## Returns up to two overlay dicts: `texture`, `px` (Vector2 top-left within cell), `size` (Vector2), `z` (int).
 static func overlay_layers_for_tile(
 	tile_str: String, cell_px: int, _fog_enabled: bool, _fog_clicked_cells: Dictionary
@@ -138,6 +161,7 @@ static func overlay_layers_for_tile(
 	if s == "torch":
 		var tt2 := texture_from_explorer_png_res(_IMAGES + "torch.png")
 		if tt2 != null:
+			_append_torch_flicker_layer(out, cell_px)
 			var it := _icon_px(cell_px)
 			var ot := (cell_px - it) * 0.5
 			out.append({"texture": tt2, "px": Vector2(ot, ot), "size": Vector2(it, it), "z": 0})
@@ -168,6 +192,8 @@ static func overlay_layers_for_tile(
 		var res_p := explorer_res_path_for_feature_image(img_fn)
 		var tfeat := texture_from_explorer_png_res(res_p)
 		if tfeat != null:
+			if GenFeat.special_feature_tile_emits_light(s):
+				_append_torch_flicker_layer(out, cell_px)
 			var iff := _feature_icon_px(cell_px, fname)
 			var off_f := (cell_px - iff) * 0.5
 			(

@@ -136,6 +136,8 @@ var _welcome_join_hud_tail: String = ""
 var _peer_display_names_by_id: Dictionary = {}
 var _last_peer_cells: Dictionary = {}
 var _last_peer_roles: Dictionary = {}
+## Replicated torch burn from `player_position_updated`; local HUD overrides via `_hud_torch_burn` when set.
+var _last_peer_torch_burn: Dictionary = {}
 ## From `player_local_stats_changed`: burn 0–100, spares ≥0; burn **-1** = hide torch (no fog).
 var _hud_torch_burn: int = -1
 var _hud_torch_spares: int = -1
@@ -276,11 +278,14 @@ func start_from_grid(
 		# Show the player marker immediately at the spawn cell — `player_position_updated`
 		# fires during the authority sync, before `start_from_grid` connects to the signal,
 		# so the initial position would otherwise be invisible until the first move.
+		var init_burn0 := _initial_torch_burn_for_welcome(welcome)
+		_last_peer_torch_burn[local_peer_id] = init_burn0
 		view.sync_peer_marker(
 			local_peer_id,
 			_net_local_cell,
 			str(welcome.get("role", "rogue")),
-			_marker_label_text(local_peer_id)
+			_marker_label_text(local_peer_id),
+			_torch_burn_for_cached_marker(local_peer_id)
 		)
 		_cb_net_player_pos = _on_net_player_position.bind(view)
 		_cb_net_fog_delta = _on_net_fog_delta.bind(view)
@@ -421,11 +426,14 @@ func reload_from_authority(grid: Dictionary, seed_for_log: int, welcome: Diction
 	_apply_welcome_peer_display_names(welcome)
 	_welcome_join_hud_tail = JoinMetadata.welcome_hud_tail(welcome)
 	# Show the player marker at the new spawn cell immediately after reload.
+	var init_burn1 := _initial_torch_burn_for_welcome(welcome)
+	_last_peer_torch_burn[_local_peer_id] = init_burn1
 	view.sync_peer_marker(
 		_local_peer_id,
 		_net_local_cell,
 		str(welcome.get("role", "rogue")),
-		_marker_label_text(_local_peer_id)
+		_marker_label_text(_local_peer_id),
+		_torch_burn_for_cached_marker(_local_peer_id)
 	)
 	_cb_net_player_pos = _on_net_player_position.bind(view)
 	_cb_net_fog_delta = _on_net_fog_delta.bind(view)
@@ -1607,10 +1615,23 @@ func _marker_label_text(peer_id: int) -> String:
 	return JoinMetadata.truncate_for_map_marker(str(_peer_display_names_by_id[peer_id]))
 
 
+func _initial_torch_burn_for_welcome(welcome: Dictionary) -> int:
+	if not bool(welcome.get("fog_enabled", true)):
+		return -1
+	return 100
+
+
+func _torch_burn_for_cached_marker(peer_id: int) -> int:
+	if peer_id == _local_peer_id and _hud_torch_burn >= 0:
+		return _hud_torch_burn
+	return int(_last_peer_torch_burn.get(peer_id, 100))
+
+
 func _apply_welcome_peer_display_names(welcome: Dictionary) -> void:
 	_peer_display_names_by_id.clear()
 	_last_peer_cells.clear()
 	_last_peer_roles.clear()
+	_last_peer_torch_burn.clear()
 	var raw: Variant = welcome.get("peer_display_names", {})
 	if raw is Dictionary:
 		_merge_peer_display_names_from_dict(raw as Dictionary)
@@ -1635,7 +1656,9 @@ func _refresh_cached_marker_for_peer(peer_id: int) -> void:
 	var cell: Vector2i = _last_peer_cells[peer_id] as Vector2i
 	var role := str(_last_peer_roles.get(peer_id, "rogue"))
 	if _grid_view.has_method("sync_peer_marker"):
-		_grid_view.sync_peer_marker(peer_id, cell, role, _marker_label_text(peer_id))
+		_grid_view.sync_peer_marker(
+			peer_id, cell, role, _marker_label_text(peer_id), _torch_burn_for_cached_marker(peer_id)
+		)
 
 
 func _refresh_all_cached_peer_markers() -> void:
@@ -2523,8 +2546,12 @@ func _on_player_local_stats_changed(
 	_last_npcs_killed = npcs_killed
 	_hud_torch_burn = torch_burn_pct
 	_hud_torch_spares = torch_spares
+	if _local_peer_id >= 0 and torch_burn_pct >= 0:
+		_last_peer_torch_burn[_local_peer_id] = torch_burn_pct
 	_ensure_stats_hud()
 	_refresh_stats_hud_text()
+	if _local_peer_id >= 0:
+		_refresh_cached_marker_for_peer(_local_peer_id)
 
 
 func _ensure_path_step_timer() -> void:
@@ -2582,7 +2609,11 @@ func _on_path_visual_step_timer() -> void:
 	var role_v := str(_last_peer_roles.get(_local_peer_id, "rogue"))
 	if _grid_view != null and _grid_view.has_method("sync_peer_marker"):
 		_grid_view.sync_peer_marker(
-			_local_peer_id, _path_visual_display, role_v, _marker_label_text(_local_peer_id)
+			_local_peer_id,
+			_path_visual_display,
+			role_v,
+			_marker_label_text(_local_peer_id),
+			_torch_burn_for_cached_marker(_local_peer_id)
 		)
 	_last_peer_cells[_local_peer_id] = _path_visual_display
 	_explorer_audio().play_move_step()
@@ -2620,14 +2651,13 @@ func _on_net_grid_clicked(c: Vector2i, net_rep: Node, view: Node2D) -> void:
 					net_rep.client_request_world_interaction(c.x, c.y)
 				return
 		var eff_c: String = GridWalk.tile_effective(_path_grid, c, _trap_defused)
-		if (
-			GridWalk.world_interaction_remote_kind(eff_c) != ""
-			and _cell_revealed_for_interaction(c)
-		):
-			if view.has_method("clear_path_preview"):
-				view.clear_path_preview()
-			net_rep.client_request_world_interaction(c.x, c.y)
-			return
+		var rk: String = GridWalk.world_interaction_remote_kind(eff_c)
+		if rk != "" and _cell_revealed_for_interaction(c):
+			if GridWalk.should_remote_world_interaction_click(_net_local_cell, c, rk):
+				if view.has_method("clear_path_preview"):
+					view.clear_path_preview()
+				net_rep.client_request_world_interaction(c.x, c.y)
+				return
 	if _path_visual_active:
 		if view.has_method("clear_path_preview"):
 			view.clear_path_preview()
@@ -2666,7 +2696,9 @@ func _on_net_grid_clicked(c: Vector2i, net_rep: Node, view: Node2D) -> void:
 		net_rep.client_request_path_move(path)
 
 
-func _on_net_player_position(peer_id: int, cell: Vector2i, role: String, view: Node2D) -> void:
+func _on_net_player_position(
+	peer_id: int, cell: Vector2i, role: String, torch_burn_pct: int, view: Node2D
+) -> void:
 	if peer_id == _local_peer_id:
 		if _path_visual_active:
 			var n_edges := GridPathfinding.king_step_count_along_path_prefix(
@@ -2688,7 +2720,8 @@ func _on_net_player_position(peer_id: int, cell: Vector2i, role: String, view: N
 	if view.has_method("sync_peer_marker"):
 		_last_peer_cells[peer_id] = cell
 		_last_peer_roles[peer_id] = role
-		view.sync_peer_marker(peer_id, cell, role, _marker_label_text(peer_id))
+		_last_peer_torch_burn[peer_id] = torch_burn_pct
+		view.sync_peer_marker(peer_id, cell, role, _marker_label_text(peer_id), torch_burn_pct)
 
 
 func _unhandled_input(event: InputEvent) -> void:

@@ -12,7 +12,6 @@ const _DEFAULT_FLOOR_PNG := "res://assets/explorer/images/tilesets/light_cracked
 const _DEFAULT_WALL_PNG := "res://assets/explorer/images/tilesets/dark_stone_with_vines.png"
 const _DEFAULT_ROAD_PNG := "res://assets/explorer/images/tilesets/dirt_and_grass.png"
 const _DEFAULT_SHRUB_PNG := "res://assets/explorer/images/tilesets/green_shrubs.png"
-const _FOG_PNG := "res://assets/explorer/images/fog.png"
 const _LOCK_PNG := "res://assets/explorer/images/lock.png"
 const _BREAK_DOOR_PNG := "res://assets/explorer/images/break_door.png"
 const _TRAP_PNG := "res://assets/explorer/images/trap.png"
@@ -176,20 +175,16 @@ static func build_tile_set_from_bundled_pngs(
 	if shrub_tex != null:
 		SRC_SHRUB = _add_grid_atlas(ts, shrub_tex)
 
-	var fog_img := _image_from_png_res(_FOG_PNG)
-	if fog_img == null:
-		fog_img = Image.create(CELL_MAP_PX, CELL_MAP_PX, false, Image.FORMAT_RGBA8)
-		fog_img.fill(Color(0.06, 0.06, 0.09, 1.0))
-	elif fog_img.get_width() != CELL_MAP_PX or fog_img.get_height() != CELL_MAP_PX:
-		fog_img = fog_img.duplicate()
-		fog_img.resize(CELL_MAP_PX, CELL_MAP_PX, Image.INTERPOLATE_LANCZOS)
-	## Three fog atlas sources: dark / dim / daylight opacity bands on the fog pattern cell.
-	var fog_dark := _fog_blend_overlay(fog_img, Color(0, 0, 0, 0.8))
-	var fog_dim := _fog_blend_overlay(fog_img, Color(0, 0, 0, 0.6))
-	var fog_day := _fog_blend_overlay(fog_img, Color(0.88, 0.89, 0.91, 0.2))
-	SRC_FOG_DARK = _add_single_region_atlas(ts, fog_dark)
-	SRC_FOG_DIM = _add_single_region_atlas(ts, fog_dim)
-	SRC_FOG_DAYLIGHT = _add_single_region_atlas(ts, fog_day)
+	## Explorer `DungeonWeb.DungeonLive.Renderer.fog_opacity_class/1` — solid overlays; `fog.png` is UI-only there.
+	var fog_dark_img := Image.create(CELL_MAP_PX, CELL_MAP_PX, false, Image.FORMAT_RGBA8)
+	fog_dark_img.fill(Color(0, 0, 0, 0.8))
+	var fog_dim_img := Image.create(CELL_MAP_PX, CELL_MAP_PX, false, Image.FORMAT_RGBA8)
+	fog_dim_img.fill(Color(0, 0, 0, 0.6))
+	var fog_daylight_img := Image.create(CELL_MAP_PX, CELL_MAP_PX, false, Image.FORMAT_RGBA8)
+	fog_daylight_img.fill(Color(0.898039, 0.905882, 0.921569, 0.2))
+	SRC_FOG_DARK = _add_single_region_atlas(ts, fog_dark_img)
+	SRC_FOG_DIM = _add_single_region_atlas(ts, fog_dim_img)
+	SRC_FOG_DAYLIGHT = _add_single_region_atlas(ts, fog_daylight_img)
 	SRC_FOG = SRC_FOG_DIM
 
 	var pillar_img := _image_from_png_res(_PILLAR_PNG)
@@ -200,25 +195,6 @@ static func build_tile_set_from_bundled_pngs(
 
 	SRC_STAIR_STRIP = _add_stair_strip_atlas(ts)
 	return ts
-
-
-## “bg-X bg-opacity-Y” on top of the fog pattern (standard over blend).
-static func _fog_blend_overlay(base: Image, top: Color) -> Image:
-	var out := base.duplicate()
-	var w := base.get_width()
-	var h := base.get_height()
-	var a := clampf(top.a, 0.0, 1.0)
-	for yy in h:
-		for xx in w:
-			var c := base.get_pixel(xx, yy)
-			var blended := Color(
-				c.r * (1.0 - a) + top.r * a,
-				c.g * (1.0 - a) + top.g * a,
-				c.b * (1.0 - a) + top.b * a,
-				clampf(c.a * (1.0 - a) + a, 0.0, 1.0)
-			)
-			out.set_pixel(xx, yy, blended)
-	return out
 
 
 static func _texture_from_png_res(res_path: String) -> Texture2D:

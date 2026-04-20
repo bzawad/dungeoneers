@@ -192,6 +192,29 @@ static func is_king_adjacent(a: Vector2i, b: Vector2i) -> bool:
 	return absi(d.x) <= 1 and absi(d.y) <= 1
 
 
+## Explorer `DungeonWeb.DungeonLive.Renderer` for labels; encounters + **special features** are
+## gated to same cell or king-adjacent so distant revealed tiles cannot open feature dialogs.
+static func should_remote_world_interaction_click(
+	player_cell: Vector2i, target_cell: Vector2i, remote_kind: String
+) -> bool:
+	match remote_kind:
+		"encounter":
+			return is_king_adjacent(player_cell, target_cell)
+		## Plain chest: click when on or beside the tile (distant chests still path-only, Explorer `move_player`).
+		"treasure":
+			return player_cell == target_cell or is_king_adjacent(player_cell, target_cell)
+		"trapped_treasure", "room_trap", "area_label":
+			return false
+		## Explorer `click_feature` is only for non-adjacent cells; adjacent uses `move_player`.
+		"room_label", "corridor_label", "building_label":
+			return not is_king_adjacent(player_cell, target_cell)
+		## Must stand on or be king-adjacent (blocks distant / other-room feature clicks).
+		"special_feature":
+			return player_cell == target_cell or is_king_adjacent(player_cell, target_cell)
+		_:
+			return false
+
+
 ## Phase 5: Explorer `click_stair` / `click_waypoint` / `click_map_link` — player must **stand on** the tile.
 static func world_interaction_stand_kind(raw_tile: String) -> String:
 	if raw_tile == "stair_up" or raw_tile == "stair_down":
@@ -212,7 +235,8 @@ static func world_interaction_stand_kind(raw_tile: String) -> String:
 	return ""
 
 
-## Phase 5: Explorer `click_encounter` / treasure investigation — any **revealed** cell (no adjacency rule).
+## Phase 5: classifies remote-interaction tile kinds (labels, encounters, treasure, …).
+## Map-click routing uses `should_remote_world_interaction_click` (Explorer `Renderer.click_action`).
 static func world_interaction_remote_kind(effective_tile: String) -> String:
 	if effective_tile == "room_trap":
 		return "room_trap"

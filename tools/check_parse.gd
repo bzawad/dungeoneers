@@ -47,6 +47,7 @@ func _init() -> void:
 		"res://dungeon/ui/dungeon_session.gd",
 		"res://dungeon/ui/dungeon_tile_assets.gd",
 		"res://dungeon/ui/map_cell_overlay_art.gd",
+		"res://dungeon/ui/torch_flicker_fx.gd",
 		"res://dungeon/ui/dungeon_door_overlays.gd",
 		"res://dungeon/network/dungeon_replication.gd",
 		"res://dungeon/network/grid_tile_patch_codec.gd",
@@ -1398,6 +1399,34 @@ func _init() -> void:
 		)
 		quit(1)
 		return
+	## FOG-02: static light disk radius follows theme fog_type (dim > dark around a torch).
+	var fog_lt: Dictionary = {}
+	for dx in range(-2, 3):
+		for dy in range(-2, 3):
+			fog_lt[Vector2i(dx, dy)] = "floor"
+	for dx2 in range(-2, 3):
+		for dy2 in range(-2, 3):
+			fog_lt[Vector2i(10 + dx2, dy2)] = "floor"
+	fog_lt[Vector2i(10, 0)] = "torch"
+	var fog_dim_lt: Dictionary = {}
+	var fog_dark_lt: Dictionary = {}
+	DungeonFog.seed_initial_revealed_with_light(fog_dim_lt, fog_lt, Vector2i(0, 0), [], "dim")
+	DungeonFog.seed_initial_revealed_with_light(fog_dark_lt, fog_lt, Vector2i(0, 0), [], "dark")
+	if fog_dim_lt.size() <= fog_dark_lt.size():
+		push_error(
+			"check_parse: FOG-02 dim fog must reveal strictly more cells than dark (static torch)"
+		)
+		quit(1)
+		return
+	if (
+		not bool(fog_dim_lt.get(Vector2i(12, 0), false))
+		or bool(fog_dark_lt.get(Vector2i(12, 0), false))
+	):
+		push_error(
+			"check_parse: FOG-02 torch at (10,0): dim must reveal (12,0), dark must not (Chebyshev r=2 vs 1)"
+		)
+		quit(1)
+		return
 	const PartyMarkerArt := preload("res://dungeon/ui/party_marker_art.gd")
 	if PartyMarkerArt.facing_from_grid_step(Vector2i(1, 0)) != PartyMarkerArt.FACING_RIGHT:
 		push_error("check_parse: MOV-01 facing step (+1,0) -> right")
@@ -1423,7 +1452,7 @@ func _init() -> void:
 		push_error("check_parse: MOV-01 diagonal (-1,1) prefers horizontal -> left")
 		quit(1)
 		return
-	var walk_frames := PartyMarkerArt.walk_frame_textures("rogue", 0)
+	var walk_frames := PartyMarkerArt.walk_frame_textures("rogue", 0, false)
 	if walk_frames.size() != 1:
 		push_error(
 			"check_parse: Phase 6 default assets must expose exactly one walk frame per facing (got ",

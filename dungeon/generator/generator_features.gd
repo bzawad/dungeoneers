@@ -1066,7 +1066,8 @@ static func _find_city_block_pos(
 	return pool[rng.randi_range(0, pool.size() - 1)]
 
 
-## Explorer `Dungeon.Generator.Features.special_feature_creates_light?/1` (subset used by fog init).
+## Explorer `Dungeon.Generator.Features.special_feature_creates_light?/1` — keep in sync with
+## `dungeon_explorer/lib/dungeon/generator/features.ex` `@special_feature_registry` entries where `creates_light: true`.
 const _CREATES_LIGHT_FEATURE_NAMES := {
 	"altar": true,
 	"brazier": true,
