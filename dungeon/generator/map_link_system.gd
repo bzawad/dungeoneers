@@ -35,6 +35,63 @@ static func map_link_tile(s: String) -> bool:
 	)
 
 
+## Explorer `Dungeon.MapLinkSystem.get_map_link_description/2` (static templates; no LLM).
+static func get_map_link_description_for_raw_tile(
+	raw_tile: String, destination_theme: String
+) -> String:
+	var dest := destination_theme.strip_edges()
+	var prefix := raw_tile.get_slice("|", 0) if raw_tile.contains("|") else raw_tile
+	match prefix:
+		"cavern_entrance":
+			return (
+				"**Cavern Entrance Discovered**\n\nYou've found a dark opening leading down into the earth. Cool, damp air flows from within, carrying the scent of stone and mystery. This entrance leads to: "
+				+ dest
+				+ ".\n\nDo you wish to venture into the depths?"
+			)
+		"dungeon_entrance":
+			return (
+				"**Ancient Entrance Discovered**\n\nBefore you stands an imposing entrance to an ancient structure. Weathered stone and iron hint at the secrets within. This entrance leads to: "
+				+ dest
+				+ ".\n\nDo you wish to explore what lies beyond?"
+			)
+		"cavern_exit":
+			return (
+				"**Exit to Surface**\n\nAhead, you can see natural light filtering down from above. Fresh air flows in, promising escape from these underground depths. This exit leads to: "
+				+ dest
+				+ ".\n\nDo you wish to return to the surface?"
+			)
+		"dungeon_exit":
+			return (
+				"**Exit to Outside**\n\nYou've found a way out of this ancient place. Sunlight streams in through the opening, and you can hear the sounds of the world beyond. This exit leads to: "
+				+ dest
+				+ ".\n\nDo you wish to leave this place behind?"
+			)
+		_:
+			return "A mysterious passage leading to unknown lands."
+
+
+## Explorer `map_template.ex` map-link dialog icon paths (`/images/map_links/...`).
+static func map_link_header_png_relpath(raw_tile: String) -> String:
+	var prefix := raw_tile.get_slice("|", 0) if raw_tile.contains("|") else raw_tile
+	var n := 1
+	var parts := raw_tile.split("|")
+	if parts.size() >= 2:
+		var rest := str(parts[1]).strip_edges()
+		if rest.is_valid_int():
+			n = clampi(int(rest), 1, 4)
+	match prefix:
+		"cavern_entrance":
+			return "map_links/cavern_entrance%d.png" % n
+		"dungeon_entrance":
+			return "map_links/dungeon_entrance%d.png" % n
+		"cavern_exit":
+			return "map_links/cavern_exit%d.png" % n
+		"dungeon_exit":
+			return "map_links/dungeon_exit%d.png" % n
+		_:
+			return "map_links/dungeon_entrance1.png"
+
+
 static func get_map_link_positions(grid: Dictionary) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for k in grid.keys():

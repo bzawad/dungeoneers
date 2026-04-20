@@ -135,7 +135,7 @@ static func _minimal_traditional(rng: RandomNumberGenerator, theme_direction: St
 	DungeonFeaturesDungeon.add_doors(grid, corridors, rooms, rng)
 	DungeonFeaturesDungeon.add_staircases(grid, rooms, theme_direction, rng)
 	_ensure_minimum_exits_dungeon(grid, rooms, theme_direction, rng)
-	## Match `TraditionalGen.fog_type_for_theme_direction` (avoid circular preload).
+	## Theme JSON missing (`find_theme_by_name` empty): same stair-direction fog default as welcome fallback.
 	var legacy_fog := "dark" if theme_direction == "down" else "dim"
 	return _result_dict(
 		grid,

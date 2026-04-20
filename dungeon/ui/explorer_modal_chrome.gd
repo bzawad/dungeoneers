@@ -7,6 +7,10 @@ const BTN_MIN_HEIGHT_PX := 40
 ## Modal footer rows with `.icon` (door, encounter, special feature, combat): matches `dungeon_session` compact rows.
 const MODAL_ACTION_BTN_MIN_HEIGHT_PX := 32
 const MODAL_ACTION_ICON_MAX_WIDTH_PX := 20
+## Explorer `DialogComponent` default `max_width` → Tailwind `max-w-lg` (32rem).
+const DIALOG_MAX_W_PX := 512
+## Readable column floor (treasure modal 480px; avoids AcceptDialog+autowrap collapsing to a skinny column).
+const DIALOG_TARGET_BODY_W_PX := 480
 
 
 static func normalize_scheme(scheme: String) -> String:
@@ -90,6 +94,23 @@ static func apply_accept_dialog_scheme(
 	var ok := d.get_ok_button()
 	if ok != null:
 		style_button(ok, ok_variant, false)
+
+
+## Cap width and wrap body text like Explorer `DialogComponent` (`max-w-lg` + `whitespace-pre-wrap`).
+static func configure_accept_dialog_body_layout(
+	d: AcceptDialog, max_width_px: int = DIALOG_MAX_W_PX
+) -> void:
+	if d == null:
+		return
+	var cap := maxi(280, max_width_px)
+	d.max_size = Vector2i(cap, 100000)
+	var min_w := mini(DIALOG_TARGET_BODY_W_PX, cap)
+	d.min_size = Vector2i(min_w, 0)
+	var lb: Label = d.get_label()
+	if lb == null:
+		return
+	lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 
 static func style_accept_dialog(d: AcceptDialog, scheme: String) -> void:
@@ -269,7 +290,7 @@ static func scheme_for_door_action(action: String, message: String) -> String:
 			if msg.contains("fail") or msg.contains("damage"):
 				return "red"
 			return "green"
-		"trap_sprung", "trap_stub":
+		"trap_sprung", "door_trap_survey":
 			return "red"
 		"trap_detected":
 			return "yellow"
@@ -284,7 +305,9 @@ static func scheme_for_world_kind_title(kind: String, title: String) -> String:
 		return "blue"
 	if kind == "treasure":
 		return "green"
-	if kind == "stair" or kind == "waypoint" or kind == "map_link":
+	if kind == "waypoint":
+		return "green"
+	if kind == "stair" or kind == "map_link":
 		return "blue"
 	if kind == "trapped_treasure_undetected" or kind == "room_trap_undetected":
 		return "yellow"

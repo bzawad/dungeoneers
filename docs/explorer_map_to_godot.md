@@ -32,6 +32,7 @@ Godot: [`party_marker_art.gd`](../dungeon/ui/party_marker_art.gd), [`dungeon_gri
 | Map token sprite index `N` in `rogue2_N.png` | `0` = south (`:forward`), `1` = north (`:back`), `2` = west (`:left`), `3` = east (`:right`) | Same `0..3` as `PartyMarkerArt.FACING_*` / **gama**-style down, up, left, right |
 | Facing from a grid step | [`update_facing_direction/2`](../../dungeon_explorer/lib/dungeon_web/live/dungeon_live/movement.ex): non-zero `dx` picks left/right before `dy` | `PartyMarkerArt.facing_from_grid_step`: horizontal preferred when abs(dx) ≥ abs(dy) (same outcome on pure orthogonals and on king-diagonal steps used here) |
 | Click / path shape | Web client **4-dir** A\* between cells | **8-dir** (Chebyshev) pathing — intentional; paths can differ while endpoints match |
+| Click planning + wall remap | `PathfindingHook`: full `walkability` grid (no fog); unwalkable tile → first cardinal walkable neighbor (+x, −x, +y, −y) | `path_click_goal_cell` + `find_path_8dir(..., plan_ignore_fog true)` in `dungeon_session.gd`; **server** still enforces `square_revealed` per step like Explorer `valid_movement?` |
 | Path onto locked door | Stop before tile; door flow | Same: stop at last walkable cell, `_server_handle_door_click` |
 | Pathfinding vs dialogs | `is_pathfinding: true` suppresses some NPC / stair / waypoint dialogs mid-path | Server applies `_apply_authorized_move` once per path cell (with step delay); client path preview + move SFX follow each `player_position_updated` |
 
@@ -51,4 +52,4 @@ Godot: [`party_marker_art.gd`](../dungeon/ui/party_marker_art.gd), [`dungeon_gri
 
 ## Manual spot-check
 
-With [`sync_explorer_assets.sh`](../tools/sync_explorer_assets.sh) run against a full Explorer `priv/static/images/` tree: compare torch, treasure, trapped treasure (after fog click reveals trap stub), a special feature, waypoint, and a map link entrance on the same seed/theme as Explorer.
+With [`sync_explorer_assets.sh`](../tools/sync_explorer_assets.sh) run against a full Explorer `priv/static/images/` tree: compare torch, treasure, trapped treasure (after fog click reveals the door-trap warning glyph per Explorer `show_trap_warning?`), a special feature, waypoint, and a map link entrance on the same seed/theme as Explorer.

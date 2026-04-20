@@ -1,5 +1,5 @@
 #!/bin/bash
-# Start a GUI or headless-capable client (stub) against a local or remote server.
+# Start a GUI or headless-capable client against a local or remote server.
 # Usage: ./start_client.sh [host] [role]
 #   host: default localhost
 #   role: default rogue (reserved for future classes)

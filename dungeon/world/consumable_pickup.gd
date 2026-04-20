@@ -7,8 +7,6 @@ const TreasureSys := preload("res://dungeon/treasure/treasure_system.gd")
 const TORCH_PICKUP_XP := 15
 ## Explorer `dismiss_healing_potion` — XP when the potion tile is collected into inventory (not the drink roll).
 const HEALING_POTION_DISCOVERY_XP := 15
-## Fallback XP when standing on `quest_item|…` with no matching active quest (parity guard).
-const QUEST_ITEM_STUB_XP := 25
 
 
 static func food_roll_and_actual(
@@ -58,15 +56,4 @@ static func potion_message() -> String:
 	return (
 		"You found a healing potion! It has been added to your inventory. "
 		+ "You can use it later when needed."
-	)
-
-
-static func quest_item_stub_message(raw_tile: String) -> String:
-	var tail: String = (
-		raw_tile.trim_prefix("quest_item|") if raw_tile.begins_with("quest_item|") else raw_tile
-	)
-	return (
-		"You recover a quest relic"
-		+ ((": " + tail) if not tail.is_empty() else "")
-		+ ".\n\n(No active quest matches this relic — awarding fallback XP only.)"
 	)

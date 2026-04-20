@@ -230,13 +230,26 @@ func _init() -> void:
 		return
 	var stw: Dictionary = WorldLabelsMsg.stair_world_interaction_payload("stair_up", "TN", "up")
 	var stw_m := str(stw.get("message", ""))
-	if not stw_m.contains("upward staircase") or not stw_m.contains("Press OK to climb"):
+	var stw_t := str(stw.get("title", ""))
+	if (
+		stw_t != "Staircase"
+		or not stw_m.contains("upward staircase")
+		or not stw_m.contains("**Go Up**")
+		or not stw_m.contains("**Cancel**")
+		or stw_m.contains("use_stair")
+	):
 		push_error("check_parse: world_labels stair interaction drift")
 		quit(1)
 		return
 	var stw2: Dictionary = WorldLabelsMsg.stair_world_interaction_payload("stair_down", "", "")
 	var stw2_m := str(stw2.get("message", ""))
-	if not stw2_m.contains("downward staircase") or not stw2_m.contains("Press OK to descend"):
+	if (
+		str(stw2.get("title", "")) != "Staircase"
+		or not stw2_m.contains("downward staircase")
+		or not stw2_m.contains("**Go Down**")
+		or not stw2_m.contains("**Cancel**")
+		or stw2_m.contains("use_stair")
+	):
 		push_error("check_parse: world_labels stair down interaction drift")
 		quit(1)
 		return
@@ -244,11 +257,13 @@ func _init() -> void:
 		"waypoint|2", "Forest", ""
 	)
 	var wpw_m := str(wpw.get("message", ""))
+	var wpw_t := str(wpw.get("title", ""))
 	if (
-		not wpw_m.contains("Waypoint Discovered")
+		wpw_t != "Waypoint Marker"
+		or not wpw_m.contains("Waypoint Discovered")
 		or not wpw_m.contains("(2)")
 		or not wpw_m.contains("Forest")
-		or not wpw_m.contains("Press OK to travel")
+		or wpw_m.contains("use_waypoint")
 	):
 		push_error("check_parse: world_labels waypoint interaction drift")
 		quit(1)
@@ -350,6 +365,56 @@ func _init() -> void:
 		push_error("check_parse: pathfinding blocked expected empty path")
 		quit(1)
 		return
+	## Fog-gated vs Explorer PathfindingHook-style planning (`plan_ignore_fog`).
+	var g_fog: Dictionary = {}
+	(
+		_path_set_floor
+		. call(
+			g_fog,
+			[
+				Vector2i(30, 30),
+				Vector2i(31, 30),
+				Vector2i(32, 30),
+				Vector2i(33, 30),
+			]
+		)
+	)
+	var p_fog_gated := GridPath.find_path_8dir(
+		g_fog,
+		Vector2i(30, 30),
+		Vector2i(33, 30),
+		empty_revealed,
+		true,
+		empty_unlocked,
+		empty_trap,
+		false,
+		false
+	)
+	if p_fog_gated.size() != 0:
+		push_error("check_parse: pathfinding plan_ignore_fog false expected empty")
+		quit(1)
+		return
+	var p_fog_plan := GridPath.find_path_8dir(
+		g_fog,
+		Vector2i(30, 30),
+		Vector2i(33, 30),
+		empty_revealed,
+		true,
+		empty_unlocked,
+		empty_trap,
+		false,
+		true
+	)
+	var want_fog := PackedVector2Array([Vector2(31, 30), Vector2(32, 30), Vector2(33, 30)])
+	if p_fog_plan.size() != want_fog.size():
+		push_error("check_parse: pathfinding plan_ignore_fog true length mismatch")
+		quit(1)
+		return
+	for fi in range(want_fog.size()):
+		if p_fog_plan[fi] != want_fog[fi]:
+			push_error("check_parse: pathfinding plan_ignore_fog true path drift")
+			quit(1)
+			return
 	var pv_prefix := PackedVector2Array([Vector2(11, 10), Vector2(12, 10), Vector2(13, 10)])
 	if (
 		GridPath.king_step_count_along_path_prefix(Vector2i(10, 10), pv_prefix, Vector2i(12, 10))

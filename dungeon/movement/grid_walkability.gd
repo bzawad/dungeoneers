@@ -120,6 +120,45 @@ static func is_walkable_for_pathfinding_at(
 	return is_walkable_for_movement_at(tile, cell, unlocked_doors, guards_hostile)
 
 
+## Sentinel when `path_click_goal_cell` has no Explorer-style target (`PathfindingHook.findWalkableNeighbor`).
+const PATH_CLICK_GOAL_INVALID := Vector2i(-1, -1)
+
+
+## Explorer `assets/js/app.js` `PathfindingHook` click target: walkable cell, else first **cardinal**
+## walkable neighbor in order **+x, −x, +y, −y** (matches `findWalkableNeighbor`). Otherwise `PATH_CLICK_GOAL_INVALID`.
+static func path_click_goal_cell(
+	grid: Dictionary,
+	cell: Vector2i,
+	trap_defused: Dictionary,
+	unlocked_doors: Dictionary,
+	guards_hostile: bool = false
+) -> Vector2i:
+	if (
+		cell.x < 0
+		or cell.y < 0
+		or cell.x >= DungeonGrid.MAP_WIDTH
+		or cell.y >= DungeonGrid.MAP_HEIGHT
+	):
+		return PATH_CLICK_GOAL_INVALID
+	var t0: String = tile_effective(grid, cell, trap_defused)
+	if is_walkable_for_pathfinding_at(t0, cell, unlocked_doors, guards_hostile):
+		return cell
+	var cardinals: Array[Vector2i] = [
+		Vector2i(1, 0),
+		Vector2i(-1, 0),
+		Vector2i(0, 1),
+		Vector2i(0, -1),
+	]
+	for d: Vector2i in cardinals:
+		var n: Vector2i = cell + d
+		if n.x < 0 or n.y < 0 or n.x >= DungeonGrid.MAP_WIDTH or n.y >= DungeonGrid.MAP_HEIGHT:
+			continue
+		var tn: String = tile_effective(grid, n, trap_defused)
+		if is_walkable_for_pathfinding_at(tn, n, unlocked_doors, guards_hostile):
+			return n
+	return PATH_CLICK_GOAL_INVALID
+
+
 ## Explorer `Movement.open_door_destination?` / trapped door — single-step move should open door flow first.
 static func should_offer_door_prompt_before_move(
 	effective_tile: String, cell: Vector2i, unlocked_doors: Dictionary

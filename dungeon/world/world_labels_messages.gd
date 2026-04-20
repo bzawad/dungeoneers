@@ -102,6 +102,24 @@ static func waypoint_number_from_raw_tile(raw_tile: String) -> int:
 	return 1
 
 
+## Explorer `get_or_generate_destination_description` static string (city / outdoor waypoints).
+static func waypoint_destination_land_message(destination_theme: String) -> String:
+	var dest := destination_theme.strip_edges()
+	return (
+		"**Waypoint to a Different Land**\n\nA signpost decorated with carvings points towards new lands. It reads: "
+		+ dest
+		+ ".\n\nDo you wish to travel there?"
+	)
+
+
+## Explorer waypoint dialog icon (`/images/map_links/outdoor_waypoint{n}.png`).
+static func waypoint_header_png_relpath(raw_tile: String) -> String:
+	if raw_tile.begins_with("starting_waypoint|"):
+		return "map_links/outdoor_waypoint1.png"
+	var n := clampi(waypoint_number_from_raw_tile(raw_tile), 1, 4)
+	return "map_links/outdoor_waypoint%d.png" % n
+
+
 ## Full world-interaction dialog for stairs (body + Explorer-style travel hint).
 static func stair_world_interaction_payload(
 	raw_tile: String, theme_name: String, theme_leg: String
@@ -110,20 +128,31 @@ static func stair_world_interaction_payload(
 	var body := stair_location_fallback_body(dir, theme_name, theme_leg)
 	var hint := ""
 	if dir == "up":
-		hint = "Press OK to climb — the dungeon reloads at the next level (Explorer `use_stair`)."
+		hint = (
+			"**Go Up** continues to the next level and reloads the dungeon map. "
+			+ "**Cancel** closes this dialog and leaves you on this floor."
+		)
+	elif dir == "down":
+		hint = (
+			"**Go Down** continues to the next level and reloads the dungeon map. "
+			+ "**Cancel** closes this dialog and leaves you on this floor."
+		)
 	else:
-		hint = "Press OK to descend — the dungeon reloads at the next level (Explorer `use_stair`)."
-	return {"title": "Stairs", "message": body + "\n\n" + hint}
+		hint = (
+			"**Continue** loads the next level and reloads the dungeon map. "
+			+ "**Cancel** closes this dialog and leaves you on this floor."
+		)
+	return {"title": "Staircase", "message": body + "\n\n" + hint}
 
 
-## Full world-interaction dialog for waypoints.
+## Full world-interaction dialog for waypoints (dungeon / cavern — same theme, next level).
+## City / outdoor copy is built in `dungeon_replication.gd` via `waypoint_destination_land_message`.
 static func waypoint_world_interaction_payload(
 	raw_tile: String, theme_name: String, theme_leg: String
 ) -> Dictionary:
 	var n := waypoint_number_from_raw_tile(raw_tile)
 	var body := waypoint_location_fallback_body(n, theme_name, theme_leg)
-	var hint := "Press OK to travel (Explorer `use_waypoint`; server picks destination like the web game)."
-	return {"title": "Waypoint", "message": body + "\n\n" + hint}
+	return {"title": "Waypoint Marker", "message": body}
 
 
 static func _split_rest(effective_tile: String) -> String:

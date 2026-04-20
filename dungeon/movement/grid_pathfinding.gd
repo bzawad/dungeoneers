@@ -1,6 +1,7 @@
 extends RefCounted
 
 ## 8-neighbor (king) **A\*** path on a walkable grid, optionally restricted to Explorer-style revealed cells.
+## `plan_ignore_fog`: client click planning only — matches Explorer `PathfindingHook` (full walkability grid); server still validates fog per step.
 ## `h` = Chebyshev distance to goal (admissible for unit-cost king steps). Open-set ties: lower `f`, then lower `h`, then lower `y`, then lower `x`.
 ## Neighbor relaxation order matches historical BFS expansion (cardinals, then diagonals).
 
@@ -48,7 +49,8 @@ static func _try_axis_aligned_line_path(
 	fog_enabled: bool,
 	unlocked_doors: Dictionary,
 	trap_defused: Dictionary,
-	guards_hostile: bool
+	guards_hostile: bool,
+	plan_ignore_fog: bool = false
 ) -> PackedVector2Array:
 	if from.x != to.x and from.y != to.y:
 		return PackedVector2Array()
@@ -63,7 +65,11 @@ static func _try_axis_aligned_line_path(
 		var n_tile: String = GridWalk.tile_effective(grid, nxt, trap_defused)
 		if not GridWalk.is_walkable_for_pathfinding_at(n_tile, nxt, unlocked_doors, guards_hostile):
 			return PackedVector2Array()
-		if fog_enabled and not DungeonFog.square_revealed(nxt, revealed, true):
+		if (
+			(not plan_ignore_fog)
+			and fog_enabled
+			and not DungeonFog.square_revealed(nxt, revealed, true)
+		):
 			return PackedVector2Array()
 		packed.append(Vector2(nxt))
 		cur = nxt
@@ -78,18 +84,27 @@ static func find_path_8dir(
 	fog_enabled: bool,
 	unlocked_doors: Dictionary,
 	trap_defused: Dictionary = {},
-	guards_hostile: bool = false
+	guards_hostile: bool = false,
+	plan_ignore_fog: bool = false
 ) -> PackedVector2Array:
 	if from == to:
 		return PackedVector2Array()
 	var to_tile: String = GridWalk.tile_effective(grid, to, trap_defused)
 	if not GridWalk.is_walkable_for_pathfinding_at(to_tile, to, unlocked_doors, guards_hostile):
 		return PackedVector2Array()
-	if fog_enabled and not DungeonFog.square_revealed(to, revealed, true):
+	if (not plan_ignore_fog) and fog_enabled and not DungeonFog.square_revealed(to, revealed, true):
 		return PackedVector2Array()
 
 	var straight: PackedVector2Array = _try_axis_aligned_line_path(
-		grid, from, to, revealed, fog_enabled, unlocked_doors, trap_defused, guards_hostile
+		grid,
+		from,
+		to,
+		revealed,
+		fog_enabled,
+		unlocked_doors,
+		trap_defused,
+		guards_hostile,
+		plan_ignore_fog
 	)
 	if not straight.is_empty():
 		return straight
@@ -152,7 +167,11 @@ static func find_path_8dir(
 				n_tile, nxt, unlocked_doors, guards_hostile
 			):
 				continue
-			if fog_enabled and not DungeonFog.square_revealed(nxt, revealed, true):
+			if (
+				(not plan_ignore_fog)
+				and fog_enabled
+				and not DungeonFog.square_revealed(nxt, revealed, true)
+			):
 				continue
 
 			var tentative_g: int = int(g_score[best_c]) + 1

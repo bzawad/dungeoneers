@@ -32,7 +32,7 @@ for _ in $(seq 1 120); do
 		break
 	fi
 	if grep -qF "Couldn't create an ENet host" "$TMP/srv.log" 2>/dev/null ||
-		grep -qF "stub server: create_server failed" "$TMP/srv.log" 2>/dev/null; then
+		grep -qF "minimal server: create_server failed" "$TMP/srv.log" 2>/dev/null; then
 		wait "$SRV" || true
 		echo "ERROR: server bind failed (see $TMP/srv.log)" >&2
 		exit 1

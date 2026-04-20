@@ -1,5 +1,5 @@
 #!/bin/bash
-# Launch editor/player build in single-player stub mode (pattern from gama/start_single_player.sh).
+# Launch editor/player build in single-player local mode (pattern from gama/start_single_player.sh).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -13,5 +13,5 @@ else
 	exit 1
 fi
 
-echo "Launching Dungeoneers single-player stub..."
+echo "Launching Dungeoneers single-player local..."
 exec "$GODOT_CMD" --path . --single-player Main.tscn

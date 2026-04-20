@@ -26,7 +26,7 @@ Authoritative Explorer sources: [`dialog_component.ex`](../../dungeon_explorer/l
 | **Treasure** (resolution) | Treasure dialog `green` | `_on_encounter_resolution_dialog` title `"Treasure found"` → `apply_accept_dialog_scheme` |
 | **Rumors** | Rumor dialog `gray`; list overlay gray border | List: `_apply_rumors_list_window_chrome`; detail: `AcceptDialog` via encounter resolution |
 | **Special items** | Special item `blue`; list like rumors | `_apply_special_items_list_window_chrome`; detail title `"Special item"` |
-| **Traps / disarm** (treasure/room) | Trap detection red/green; disarm UI primary/secondary | `_apply_trapped_treasure_window_chrome` / `_apply_room_trap_window_chrome` (`yellow` caution panel) |
+| **Traps / disarm** (treasure/room) | Trap detection `red` until success (`green`); Disarm + Skip with icons | `_ensure_trapped_treasure_window` / `_ensure_room_trap_window` — `red` panel/body, scroll `SHRINK_BEGIN` + `SCROLL_BODY_MAX_PX`, **Disarm** (`lockpicks.png`) + **Skip** (`cancel.png`), compact icon row |
 
 **Manual spot-check:** open each window in a net session and confirm border tint, body text readability, and primary vs secondary buttons match Explorer tone.
 

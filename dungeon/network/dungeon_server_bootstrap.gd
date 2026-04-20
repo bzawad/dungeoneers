@@ -27,7 +27,7 @@ static func args_has(args: PackedStringArray, needle: String) -> bool:
 ## Returns keys: [code]ok[/code], [code]error[/code], [code]replication[/code], [code]net_host[/code],
 ## [code]chosen_seed[/code], [code]theme[/code], [code]checksum[/code], [code]listen_port[/code],
 ## [code]fog_enabled[/code], [code]log_fog_type[/code], [code]log_fog_radius[/code], [code]effective_torch[/code].
-static func start_stub_server_on(
+static func start_minimal_server_on(
 	parent: Node,
 	dungeon_seed: int,
 	_dungeon_theme: String,
@@ -114,7 +114,7 @@ static func start_stub_server_on(
 	parent.add_child(net_host)
 	if not net_host.start_listen(listen_port, max_clients):
 		var err_msg := (
-			"[Dungeoneers] stub server: create_server failed (port "
+			"[Dungeoneers] minimal server: create_server failed (port "
 			+ str(listen_port)
 			+ " in use? try --port <other> or stop processes on this port)"
 		)

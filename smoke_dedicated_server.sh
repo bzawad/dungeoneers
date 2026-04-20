@@ -39,7 +39,7 @@ for _ in $(seq 1 120); do
 		ready=1
 		break
 	fi
-	if grep -qE "stub server: create_server failed|Couldn't create an ENet host" "$TMP/srv.log" 2>/dev/null; then
+	if grep -qE "minimal server: create_server failed|Couldn't create an ENet host" "$TMP/srv.log" 2>/dev/null; then
 		wait "$SRV" || true
 		echo "ERROR: dedicated server could not bind port ${PORT}" >&2
 		exit 1

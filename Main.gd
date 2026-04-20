@@ -161,7 +161,7 @@ func _run_mode(args: PackedStringArray) -> void:
 
 	match mode:
 		"server":
-			_start_stub_server(
+			_start_minimal_server(
 				dungeon_seed,
 				dungeon_theme,
 				server_exit_after_sec,
@@ -199,7 +199,7 @@ func _run_mode(args: PackedStringArray) -> void:
 			)
 		"single_player":
 			if headless:
-				print("[Dungeoneers] single-player headless stub (role=", player_role, ")")
+				print("[Dungeoneers] single-player headless smoke (role=", player_role, ")")
 				get_tree().quit(0)
 			else:
 				_start_local_dungeon(
@@ -341,7 +341,7 @@ func _add_dungeon_replication() -> Node:
 	return rep
 
 
-func _start_stub_server(
+func _start_minimal_server(
 	dungeon_seed: int,
 	dungeon_theme: String,
 	server_exit_after_sec: float,
@@ -354,7 +354,7 @@ func _start_stub_server(
 	smoke_torch_expire_probe: bool = false,
 	debug_net: bool = false
 ) -> void:
-	var r: Dictionary = DungeonServerBootstrap.start_stub_server_on(
+	var r: Dictionary = DungeonServerBootstrap.start_minimal_server_on(
 		self,
 		dungeon_seed,
 		dungeon_theme,

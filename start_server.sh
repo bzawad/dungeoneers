@@ -1,10 +1,10 @@
 #!/bin/bash
-# Headless ENet stub server with auto-restart (same pattern as gama/start_server.sh).
+# Headless ENet listen server with auto-restart (same pattern as gama/start_server.sh).
 # Usage: ./start_server.sh
 # Optional extra Godot args for Main.tscn (after --server is already set):
 #   ./start_server.sh -- --seed 42 --theme up --server-exit-after 120
 
-echo "Starting Dungeoneers headless server (stub) with auto-restart..."
+echo "Starting Dungeoneers headless listen server with auto-restart..."
 
 if ! command -v godot4 &> /dev/null; then
 	echo "ERROR: godot4 not found. Run ./setup_cli.sh first."
@@ -42,7 +42,7 @@ trap cleanup SIGINT SIGTERM
 while [ "$STOP_REQUESTED" = false ]; do
 	RESTART_COUNT=$((RESTART_COUNT + 1))
 	echo ""
-	echo "Starting game #$RESTART_COUNT (stub server)..."
+	echo "Starting game #$RESTART_COUNT (listen server)..."
 
 	godot4 --path . --headless --server Main.tscn "${EXTRA_GODOT_ARGS[@]}" &
 	SERVER_PID=$!

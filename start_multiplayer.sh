@@ -1,5 +1,5 @@
 #!/bin/bash
-# Start stub headless server plus N clients (pattern from gama/start_multiplayer.sh).
+# Start headless server plus N clients (pattern from gama/start_multiplayer.sh).
 # Usage: ./start_multiplayer.sh [num_clients] [host]
 #
 # Logs: each client prints my_peer_id=… then Client replicated … checksum=… player_id=…

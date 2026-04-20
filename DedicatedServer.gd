@@ -51,7 +51,7 @@ func _ready() -> void:
 		_listen_port = DEFAULT_PORT
 
 	var cfg := _host_flags_from_args(args)
-	var r: Dictionary = DungeonServerBootstrap.start_stub_server_on(
+	var r: Dictionary = DungeonServerBootstrap.start_minimal_server_on(
 		self,
 		cfg.dungeon_seed,
 		cfg.dungeon_theme,
