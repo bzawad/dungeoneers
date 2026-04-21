@@ -306,10 +306,10 @@ func _init() -> void:
 			]
 		)
 	)
-	var p_stra := GridPath.find_path_8dir(
+	var p_stra := GridPath.find_path_4dir(
 		g_straight, Vector2i(10, 10), Vector2i(13, 10), empty_revealed, false, empty_unlocked
 	)
-	var b_stra := GridPath.find_path_8dir_bfs_reference(
+	var b_stra := GridPath.find_path_4dir_bfs_reference(
 		g_straight, Vector2i(10, 10), Vector2i(13, 10), empty_revealed, false, empty_unlocked
 	)
 	if p_stra.size() != b_stra.size() or p_stra.size() != 3:
@@ -331,18 +331,18 @@ func _init() -> void:
 			]
 		)
 	)
-	var p_l := GridPath.find_path_8dir(
+	var p_l := GridPath.find_path_4dir(
 		g_l, Vector2i(2, 2), Vector2i(4, 4), empty_revealed, false, empty_unlocked
 	)
-	var b_l := GridPath.find_path_8dir_bfs_reference(
+	var b_l := GridPath.find_path_4dir_bfs_reference(
 		g_l, Vector2i(2, 2), Vector2i(4, 4), empty_revealed, false, empty_unlocked
 	)
-	if p_l.size() != b_l.size() or p_l.size() != 3:
+	if p_l.size() != b_l.size() or p_l.size() != 4:
 		push_error("check_parse: pathfinding L-shape length mismatch")
 		quit(1)
 		return
-	## Shortest king route uses one diagonal (3,2)→(4,3); orth-only corridor would be 4 steps.
-	var want_l := PackedVector2Array([Vector2(3, 2), Vector2(4, 3), Vector2(4, 4)])
+	## Shortest orthogonal route along the L: (3,2)→(4,2)→(4,3)→(4,4).
+	var want_l := PackedVector2Array([Vector2(3, 2), Vector2(4, 2), Vector2(4, 3), Vector2(4, 4)])
 	if p_l.size() != want_l.size():
 		push_error("check_parse: pathfinding L-shape A* path size drift")
 		quit(1)
@@ -355,10 +355,10 @@ func _init() -> void:
 	## No path through wall gap.
 	var g_block: Dictionary = {}
 	_path_set_floor.call(g_block, [Vector2i(20, 20), Vector2i(21, 20), Vector2i(23, 20)])
-	var p_blk := GridPath.find_path_8dir(
+	var p_blk := GridPath.find_path_4dir(
 		g_block, Vector2i(20, 20), Vector2i(23, 20), empty_revealed, false, empty_unlocked
 	)
-	var b_blk := GridPath.find_path_8dir_bfs_reference(
+	var b_blk := GridPath.find_path_4dir_bfs_reference(
 		g_block, Vector2i(20, 20), Vector2i(23, 20), empty_revealed, false, empty_unlocked
 	)
 	if p_blk.size() != 0 or b_blk.size() != 0:
@@ -379,7 +379,7 @@ func _init() -> void:
 			]
 		)
 	)
-	var p_fog_gated := GridPath.find_path_8dir(
+	var p_fog_gated := GridPath.find_path_4dir(
 		g_fog,
 		Vector2i(30, 30),
 		Vector2i(33, 30),
@@ -394,7 +394,7 @@ func _init() -> void:
 		push_error("check_parse: pathfinding plan_ignore_fog false expected empty")
 		quit(1)
 		return
-	var p_fog_plan := GridPath.find_path_8dir(
+	var p_fog_plan := GridPath.find_path_4dir(
 		g_fog,
 		Vector2i(30, 30),
 		Vector2i(33, 30),
@@ -417,24 +417,30 @@ func _init() -> void:
 			return
 	var pv_prefix := PackedVector2Array([Vector2(11, 10), Vector2(12, 10), Vector2(13, 10)])
 	if (
-		GridPath.king_step_count_along_path_prefix(Vector2i(10, 10), pv_prefix, Vector2i(12, 10))
+		GridPath.orthogonal_step_count_along_path_prefix(
+			Vector2i(10, 10), pv_prefix, Vector2i(12, 10)
+		)
 		!= 2
 	):
-		push_error("check_parse: king_step_count_along_path_prefix mid")
+		push_error("check_parse: orthogonal_step_count_along_path_prefix mid")
 		quit(1)
 		return
 	if (
-		GridPath.king_step_count_along_path_prefix(Vector2i(10, 10), pv_prefix, Vector2i(10, 10))
+		GridPath.orthogonal_step_count_along_path_prefix(
+			Vector2i(10, 10), pv_prefix, Vector2i(10, 10)
+		)
 		!= 0
 	):
-		push_error("check_parse: king_step_count_along_path_prefix start")
+		push_error("check_parse: orthogonal_step_count_along_path_prefix start")
 		quit(1)
 		return
 	if (
-		GridPath.king_step_count_along_path_prefix(Vector2i(10, 10), pv_prefix, Vector2i(99, 99))
+		GridPath.orthogonal_step_count_along_path_prefix(
+			Vector2i(10, 10), pv_prefix, Vector2i(99, 99)
+		)
 		!= -1
 	):
-		push_error("check_parse: king_step_count_along_path_prefix off-path")
+		push_error("check_parse: orthogonal_step_count_along_path_prefix off-path")
 		quit(1)
 		return
 	const PlayerProgression := preload("res://dungeon/progression/player_progression.gd")

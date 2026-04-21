@@ -5,6 +5,7 @@ extends Node2D
 ## When `res://assets/explorer/images/` PNGs exist, use 64px atlas terrain + door/stair/pillar decor (`dungeon_tile_assets.gd`).
 ## Camera: **Explorer `DungeonWeb.DungeonLive`** sliding window (`update_viewport_for_player` / `get_viewport_size/1`),
 ## not a scaled overview of the full map. Desktop uses a 16×16 cell window; narrow windows (<1024px) use 6×6 (mobile).
+## `MAP_CAMERA_ZOOM_BIAS` nudges past strict fit so tiles read larger (closer “camera”); max zoom matches Gama `CameraController.max_zoom`.
 
 const DungeonGrid := preload("res://dungeon/generator/grid.gd")
 const DungeonFog := preload("res://dungeon/fog/fog_of_war.gd")
@@ -25,11 +26,19 @@ const EXPLORER_VIEWPORT_CELLS_DESKTOP := Vector2i(16, 16)
 const EXPLORER_VIEWPORT_CELLS_MOBILE := Vector2i(6, 6)
 
 const GAMA_STYLE_MAX_ZOOM := 2.0
+## Party marker motion: **Gama-style** lerp toward a moving target each frame (see `gama/Player.gd` / `NPC.gd`).
+## No SineGlide-style bob — only smooth grid-to-grid motion. Higher = snappier; lower = slower glide.
+const PARTY_MARKER_MOVE_SMOOTH_SPEED := 5.0
+const PARTY_MARKER_ARRIVE_EPS_PX := 0.35
+## Gama `CameraController.gd`-style map/camera follow: lerp toward target each frame (see `smoothing_factor` there).
+const CAMERA_FOLLOW_SMOOTH_SPEED := 9.0
+const CAMERA_FOLLOW_ARRIVE_EPS_PX := 0.45
 ## Explorer interactive map cell is 48×48 (`renderer.ex` `w-[48px] h-[48px]`); Dungeoneers atlas cells are 64×64.
 const EXPLORER_MAP_LABEL_CELL_PX := 48
 ## Allow strong zoom-out so a 16×64px-tall strip still fits very short windows (viewport mode).
 const VIEWPORT_ZOOM_CLAMP_MIN := 0.08
-const CAMERA_VIEW_MARGIN := 0.92
+## Applied after strict `z_fit` (fit Explorer cell span into viewport). >1 zooms in; was 0.92 underscan.
+const MAP_CAMERA_ZOOM_BIAS := 1.10
 
 const CELL_PX_LEGACY := 12
 const PALETTE_COUNT_LEGACY := 20
@@ -392,8 +401,10 @@ func _apply_generation_layer_modulate() -> void:
 		_terrain_under_fog_layer.modulate = Color(m.r * 0.58, m.g * 0.58, m.b * 0.58, 1.0)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_update_hover_polish()
+	_smooth_peer_markers(delta)
+	_smooth_camera_follow(delta)
 
 
 func _cell_is_revealed_for_hover(cell: Vector2i) -> bool:
@@ -734,6 +745,45 @@ func _apply_torch_glow(marker_root: Control, facing: int, side: float, lit: bool
 	_start_marker_torch_flicker(marker_root, glow)
 
 
+func _smooth_peer_markers(delta: float) -> void:
+	if _players_root == null:
+		return
+	var arrive := PARTY_MARKER_ARRIVE_EPS_PX
+	var t := 1.0 - exp(-PARTY_MARKER_MOVE_SMOOTH_SPEED * delta)
+	for peer_id in _peer_markers.keys():
+		var r := _peer_markers.get(peer_id) as Control
+		if r == null or not is_instance_valid(r):
+			continue
+		if not r.has_meta("marker_anim_target_pos"):
+			continue
+		var tgt: Vector2 = r.get_meta("marker_anim_target_pos") as Vector2
+		var tgts: Vector2 = r.get_meta("marker_anim_target_size") as Vector2
+		r.position = r.position.lerp(tgt, t)
+		r.size = r.size.lerp(tgts, t)
+		if r.position.distance_to(tgt) > arrive or r.size.distance_to(tgts) > arrive:
+			var lbl_nm := str(r.get_meta("marker_label", ""))
+			_update_peer_marker_name_label(r, lbl_nm, r.size)
+			continue
+		r.position = tgt
+		r.size = tgts
+		if r.get_meta("marker_anim_walk_active", false):
+			r.set_meta("marker_anim_walk_active", false)
+			var spr_done := _peer_marker_sprite_rect(r)
+			if spr_done != null:
+				var fr_done := int(r.get_meta("marker_facing", PartyMarkerArt.FACING_DOWN))
+				var rl_done := str(r.get_meta("marker_role", "rogue"))
+				var burn_done := int(r.get_meta("marker_torch_burn", 100))
+				var lit_done := _peer_marker_torch_lit(burn_done)
+				var st_done := PartyMarkerArt.texture_for_role_facing(rl_done, fr_done, lit_done)
+				if st_done == null:
+					st_done = PartyMarkerArt.texture_for_role(rl_done, lit_done)
+				if st_done != null:
+					spr_done.texture = st_done
+				_apply_torch_glow(r, fr_done, r.size.x, lit_done)
+		var lbl_done := str(r.get_meta("marker_label", ""))
+		_update_peer_marker_name_label(r, lbl_done, r.size)
+
+
 func sync_peer_marker(
 	peer_id: int,
 	cell: Vector2i,
@@ -779,6 +829,7 @@ func sync_peer_marker(
 		existing = null
 
 	var r: Control
+	var just_built := false
 	if existing == null:
 		if want_tex:
 			var root := Control.new()
@@ -813,6 +864,7 @@ func sync_peer_marker(
 			_players_root.add_child(root)
 			_peer_markers[peer_id] = root
 			r = root
+			just_built = true
 		else:
 			var p := Panel.new()
 			p.name = "PlayerMarker_%d" % peer_id
@@ -827,6 +879,7 @@ func sync_peer_marker(
 			_players_root.add_child(p)
 			_peer_markers[peer_id] = p
 			r = p
+			just_built = true
 	else:
 		r = existing
 		r.set_meta("marker_label", display_label)
@@ -842,6 +895,8 @@ func sync_peer_marker(
 	var side := _cell_px - 2.0 * inset
 	var target_pos := Vector2(cell.x * _cell_px + inset, cell.y * _cell_px + inset)
 	var target_size := Vector2(side, side)
+	r.set_meta("marker_anim_target_pos", target_pos)
+	r.set_meta("marker_anim_target_size", target_size)
 
 	var spr := _peer_marker_sprite_rect(r)
 	if spr != null:
@@ -864,49 +919,42 @@ func sync_peer_marker(
 				sb2.bg_color = Color(0.92, 0.68, 0.08, 0.42)
 				sb2.border_color = Color(1.0, 0.95, 0.7, 0.95)
 
-	if r.position.distance_to(target_pos) > 0.5 and is_inside_tree():
+	var snap_visual := just_built
+	if not snap_visual and prev is Vector2i:
+		var pvc: Vector2i = prev as Vector2i
+		if pvc != cell and not GridWalk.is_king_adjacent(pvc, cell):
+			snap_visual = true
+
+	if snap_visual:
+		r.position = target_pos
+		r.size = target_size
+		r.set_meta("marker_anim_walk_active", false)
 		if spr != null:
 			_apply_torch_glow(r, facing, side, torch_lit)
-		var tw := create_tween()
-		tw.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tw.tween_property(r, "position", target_pos, 0.12)
-		tw.parallel().tween_property(r, "size", target_size, 0.12)
+			if want_tex and tex != null:
+				spr.texture = tex
+	elif prev is Vector2i and (prev as Vector2i) != cell:
+		r.set_meta("marker_anim_walk_active", true)
 		if spr != null:
+			_apply_torch_glow(r, facing, side, torch_lit)
 			var disp := PartyMarkerArt.make_walk_display_texture(role, facing, torch_lit)
 			if disp != null:
 				spr.texture = disp
-		tw.finished.connect(
-			func() -> void:
-				if not is_instance_valid(r):
-					return
-				var spr_done := _peer_marker_sprite_rect(r)
-				if spr_done != null:
-					var fr_done := int(r.get_meta("marker_facing", PartyMarkerArt.FACING_DOWN))
-					var rl_done := str(r.get_meta("marker_role", role))
-					var burn_done := int(r.get_meta("marker_torch_burn", torch_burn_pct))
-					var lit_done := _peer_marker_torch_lit(burn_done)
-					var st_done := PartyMarkerArt.texture_for_role_facing(
-						rl_done, fr_done, lit_done
-					)
-					if st_done == null:
-						st_done = PartyMarkerArt.texture_for_role(rl_done, lit_done)
-					if st_done != null:
-						spr_done.texture = st_done
-					_apply_torch_glow(r, fr_done, r.size.x, lit_done)
-				_update_peer_marker_name_label(r, display_label, r.size)
-		)
+			elif want_tex and tex != null:
+				spr.texture = tex
 	else:
-		r.position = target_pos
-		r.size = target_size
-		if spr != null and want_tex and tex != null:
-			spr.texture = tex
+		r.set_meta("marker_anim_walk_active", false)
 		if spr != null:
+			if want_tex and tex != null:
+				spr.texture = tex
 			_apply_torch_glow(r, facing, side, torch_lit)
-	_update_peer_marker_name_label(r, display_label, target_size)
+
+	_update_peer_marker_name_label(r, display_label, r.size)
 
 	if _follow_local_camera and peer_id == _local_peer_id and _camera_for_fit != null:
 		_camera_focus_cell = cell
-		_fit_camera(_camera_for_fit)
+		if snap_visual:
+			_fit_camera(_camera_for_fit, true)
 
 
 func _update_peer_marker_name_label(
@@ -967,7 +1015,7 @@ func _explorer_visible_cell_span(viewport_width_px: int) -> Vector2i:
 	return Vector2i(mini(cap.x, DungeonGrid.MAP_WIDTH), mini(cap.y, DungeonGrid.MAP_HEIGHT))
 
 
-func _explorer_clamped_view_center_world(focus_cell: Vector2i) -> Vector2:
+func _explorer_clamped_view_center_for_point(focus_world: Vector2) -> Vector2:
 	var vp := get_viewport()
 	var vw_px := EXPLORER_VIEWPORT_BREAKPOINT_PX
 	if vp != null:
@@ -975,7 +1023,7 @@ func _explorer_clamped_view_center_world(focus_cell: Vector2i) -> Vector2:
 	var span := _explorer_visible_cell_span(vw_px)
 	var map_w := float(DungeonGrid.MAP_WIDTH * _cell_px)
 	var map_h := float(DungeonGrid.MAP_HEIGHT * _cell_px)
-	var p := _cell_center_world(focus_cell)
+	var p := focus_world
 	var half_w := float(span.x * _cell_px) * 0.5
 	var half_h := float(span.y * _cell_px) * 0.5
 	var cx: float
@@ -991,20 +1039,63 @@ func _explorer_clamped_view_center_world(focus_cell: Vector2i) -> Vector2:
 	return Vector2(cx, cy)
 
 
-func _fit_camera(cam: Camera2D) -> void:
+func _explorer_clamped_view_center_world(focus_cell: Vector2i) -> Vector2:
+	return _explorer_clamped_view_center_for_point(_cell_center_world(focus_cell))
+
+
+func _compute_camera_fit(cam: Camera2D) -> Dictionary:
 	var vp := cam.get_viewport()
 	if vp == null:
-		return
+		return {}
 	var vs: Vector2 = vp.get_visible_rect().size
 	if vs.x < 2.0 or vs.y < 2.0:
-		return
-	_camera_world_center = _explorer_clamped_view_center_world(_camera_focus_cell)
+		return {}
+	var focus_world: Vector2
+	if _follow_local_camera and _local_peer_id >= 0:
+		var m := _peer_markers.get(_local_peer_id) as Control
+		if m != null and is_instance_valid(m):
+			focus_world = m.position + m.size * 0.5
+		else:
+			focus_world = _cell_center_world(_camera_focus_cell)
+	else:
+		focus_world = _cell_center_world(_camera_focus_cell)
+	var desired := _explorer_clamped_view_center_for_point(focus_world)
 	var span := _explorer_visible_cell_span(int(vs.x))
 	var vis_px := Vector2(float(span.x * _cell_px), float(span.y * _cell_px))
 	var z_fit: float = minf(vs.x / vis_px.x, vs.y / vis_px.y)
-	var z: float = clampf(z_fit * CAMERA_VIEW_MARGIN, VIEWPORT_ZOOM_CLAMP_MIN, GAMA_STYLE_MAX_ZOOM)
-	cam.zoom = Vector2(z, z)
-	cam.position = _camera_world_center
+	var z: float = clampf(
+		z_fit * MAP_CAMERA_ZOOM_BIAS, VIEWPORT_ZOOM_CLAMP_MIN, GAMA_STYLE_MAX_ZOOM
+	)
+	return {"zoom": Vector2(z, z), "position": desired}
+
+
+func _smooth_camera_follow(delta: float) -> void:
+	if not _follow_local_camera:
+		return
+	var cam := _camera_for_fit
+	if cam == null or not is_instance_valid(cam):
+		return
+	var fit := _compute_camera_fit(cam)
+	if fit.is_empty():
+		return
+	var desired: Vector2 = fit["position"] as Vector2
+	var zz: Vector2 = fit["zoom"] as Vector2
+	cam.zoom = zz
+	_camera_world_center = desired
+	var t := 1.0 - exp(-CAMERA_FOLLOW_SMOOTH_SPEED * delta)
+	cam.position = cam.position.lerp(desired, t)
+	if cam.position.distance_to(desired) < CAMERA_FOLLOW_ARRIVE_EPS_PX:
+		cam.position = desired
+
+
+func _fit_camera(cam: Camera2D, snap_camera_position: bool = true) -> void:
+	var fit := _compute_camera_fit(cam)
+	if fit.is_empty():
+		return
+	_camera_world_center = fit["position"] as Vector2
+	cam.zoom = fit["zoom"] as Vector2
+	if snap_camera_position or not _follow_local_camera:
+		cam.position = _camera_world_center
 
 
 ## Returns the short label text to draw on top of a tile (empty string = no label).

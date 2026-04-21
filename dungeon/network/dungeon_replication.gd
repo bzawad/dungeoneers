@@ -1780,47 +1780,118 @@ func _first_adjacent_room_trap_cell(player_cell: Vector2i, revealed: Dictionary)
 	return Vector2i(-1, -1)
 
 
-func _server_maybe_post_move_traps(peer_id: int, dst: Vector2i) -> bool:
-	if _server_combat_by_peer.has(peer_id):
-		return false
-	if not _player_positions.has(peer_id):
-		return false
+## Explorer `Movement.process_room_traps` / tile trap tuple: dialogs that set `final_show_trap_dialog` and
+## block `process_all_encounters` — **not** plain `treasure` (encounter can preempt treasure in `process_all_dialogs`).
+func _server_post_move_trap_modals_blocking_encounter(peer_id: int, dst: Vector2i) -> Dictionary:
+	var showed := false
+	var blocks_enc := false
+	if _server_combat_by_peer.has(peer_id) or not _player_positions.has(peer_id):
+		return {"showed_modal": false, "blocks_adjacent_encounter": false}
 	var raw_dst: String = GridWalk.tile_at(_authority_grid, dst)
 	var revealed_m: Dictionary = _revealed_for_peer(peer_id)
 	if raw_dst == "trapped_treasure":
 		if (not _fog_enabled) or DungeonFog.square_revealed(dst, revealed_m, true):
 			_server_handle_trapped_treasure_interaction(peer_id, dst)
-			return true
-		return false
-	if raw_dst == "treasure":
-		if (not _fog_enabled) or DungeonFog.square_revealed(dst, revealed_m, true):
-			var eff_tr: String = _authority_effective_tile(dst)
-			var pack_tr: Dictionary = _world_interaction_payload("treasure", raw_dst, eff_tr, dst)
-			_deliver_world_interaction_to_peer(
-				peer_id,
-				"treasure",
-				dst,
-				str(pack_tr["title"]),
-				str(pack_tr["message"]),
-			)
-			print(
-				"[Dungeoneers] post_move_treasure peer_id=",
-				peer_id,
-				" cell=",
-				dst,
-			)
-			return true
-		return false
+			showed = true
+			blocks_enc = true
+		return {"showed_modal": showed, "blocks_adjacent_encounter": blocks_enc}
 	if raw_dst == "room_trap":
 		if (not _fog_enabled) or DungeonFog.square_revealed(dst, revealed_m, true):
 			_server_handle_room_trap_interaction(peer_id, dst)
-			return true
-		return false
+			showed = true
+			blocks_enc = true
+		return {"showed_modal": showed, "blocks_adjacent_encounter": blocks_enc}
 	var trap_cell := _first_adjacent_room_trap_cell(dst, revealed_m)
 	if trap_cell.x >= 0:
 		_server_handle_room_trap_interaction(peer_id, trap_cell)
-		return true
-	return false
+		showed = true
+		blocks_enc = true
+	return {"showed_modal": showed, "blocks_adjacent_encounter": blocks_enc}
+
+
+func _server_maybe_post_move_plain_treasure_discovery(peer_id: int, dst: Vector2i) -> bool:
+	if _server_combat_by_peer.has(peer_id) or not _player_positions.has(peer_id):
+		return false
+	var raw_dst: String = GridWalk.tile_at(_authority_grid, dst)
+	if raw_dst != "treasure":
+		return false
+	var revealed_m: Dictionary = _revealed_for_peer(peer_id)
+	if _fog_enabled and not DungeonFog.square_revealed(dst, revealed_m, true):
+		return false
+	var eff_tr: String = _authority_effective_tile(dst)
+	var pack_tr: Dictionary = _world_interaction_payload("treasure", raw_dst, eff_tr, dst)
+	_deliver_world_interaction_to_peer(
+		peer_id, "treasure", dst, str(pack_tr["title"]), str(pack_tr["message"])
+	)
+	print("[Dungeoneers] post_move_treasure peer_id=", peer_id, " cell=", dst)
+	return true
+
+
+## Explorer `Movement.check_adjacent_encounters_at_position` + `evaluate_monster_for_adjacency` — king-adjacent
+## untriggered encounter (NPC excluded; peaceful guards excluded). No fog check on the encounter cell (torch-out sensing).
+func _server_first_adjacent_monster_encounter_cell(peer_id: int, player_cell: Vector2i) -> Vector2i:
+	var offs: Array[Vector2i] = [
+		Vector2i(-1, -1),
+		Vector2i(0, -1),
+		Vector2i(1, -1),
+		Vector2i(-1, 0),
+		Vector2i(1, 0),
+		Vector2i(-1, 1),
+		Vector2i(0, 1),
+		Vector2i(1, 1),
+	]
+	var p_al := int(_server_player_alignment.get(peer_id, PlayerAlignment.starting_alignment()))
+	for d: Vector2i in offs:
+		var c := player_cell + d
+		var raw: String = GridWalk.tile_at(_authority_grid, c)
+		if not raw.begins_with("encounter|"):
+			continue
+		var mname: String = _encounter_monster_name_from_tile(raw)
+		var def: Dictionary = MonsterTable.lookup_monster(mname)
+		var role: String = str(def.get("role", "")).strip_edges().to_lower()
+		if role == "npc":
+			continue
+		if role == "guard":
+			var m_align := str(def.get("alignment", "neutral")).strip_edges().to_lower()
+			var hostile := PlayerAlignment.npc_hostile_to_player(m_align, p_al)
+			if not _authority_guards_hostile and not hostile:
+				continue
+		return c
+	return Vector2i(-1, -1)
+
+
+func _server_maybe_post_move_adjacent_encounter(
+	peer_id: int, player_cell: Vector2i, allow_prompt: bool
+) -> bool:
+	if not allow_prompt:
+		return false
+	if _server_combat_by_peer.has(peer_id):
+		return false
+	if not _player_positions.has(peer_id):
+		return false
+	if _player_positions[peer_id] != player_cell:
+		return false
+	var enc_cell := _server_first_adjacent_monster_encounter_cell(peer_id, player_cell)
+	if enc_cell.x < 0:
+		return false
+	var eff: String = _authority_effective_tile(enc_cell)
+	if not eff.begins_with("encounter|"):
+		return false
+	var eb: Dictionary = _world_interaction_encounter_branch(peer_id, enc_cell, eff)
+	var send_kind: String = str(eb.get("kind", "encounter"))
+	var pack_r := {"title": str(eb.get("title", "")), "message": str(eb.get("message", ""))}
+	if send_kind == "npc_quest_offer":
+		var qv: Variant = eb.get("quest", null)
+		if qv is Dictionary:
+			_server_pending_npc_quest[peer_id] = {
+				"cell": enc_cell,
+				"quest": (qv as Dictionary).duplicate(true),
+			}
+	_deliver_world_interaction_to_peer(
+		peer_id, send_kind, enc_cell, str(pack_r["title"]), str(pack_r["message"])
+	)
+	print("[Dungeoneers] post_move_adjacent_encounter peer_id=", peer_id, " cell=", enc_cell)
+	return true
 
 
 func _roll_room_trap_detect(peer_id: int, cell: Vector2i) -> Dictionary:
@@ -2482,7 +2553,7 @@ func _headless_first_reachable_king_neighbor(
 			t_eff, s, _client_unlocked_doors, _client_guards_hostile
 		):
 			continue
-		var pth := GridPath.find_path_8dir(
+		var pth := GridPath.find_path_4dir(
 			grid,
 			spawn,
 			s,
@@ -2514,7 +2585,7 @@ func run_headless_world_interaction_probe() -> void:
 			if stand_wi.x < 0:
 				continue
 			if stand_wi != spawn_wi:
-				var path_wi := GridPath.find_path_8dir(
+				var path_wi := GridPath.find_path_4dir(
 					grid_wi,
 					spawn_wi,
 					stand_wi,
@@ -2549,7 +2620,7 @@ func run_headless_treasure_probe() -> void:
 			var raw: String = GridWalk.tile_at(grid_tr, c)
 			if raw != "treasure":
 				continue
-			var path_tr := GridPath.find_path_8dir(
+			var path_tr := GridPath.find_path_4dir(
 				grid_tr,
 				spawn_tr,
 				c,
@@ -2622,7 +2693,7 @@ func run_headless_pickup_probe() -> void:
 				var c_pk := Vector2i(x_pk, y_pk)
 				if GridWalk.tile_at(grid_pk, c_pk) != want:
 					continue
-				var path_pk := GridPath.find_path_8dir(
+				var path_pk := GridPath.find_path_4dir(
 					grid_pk,
 					spawn_pk,
 					c_pk,
@@ -2670,7 +2741,7 @@ func run_headless_trapped_treasure_probe() -> void:
 		print("[Dungeoneers] trapped_treasure_probe skipped (no trapped_treasure tile on grid)")
 		return
 	var spawn_tt: Vector2i = _client_spawn_cell
-	var path_tt := GridPath.find_path_8dir(
+	var path_tt := GridPath.find_path_4dir(
 		grid_tt,
 		spawn_tt,
 		pick_tt,
@@ -2735,7 +2806,7 @@ func run_headless_trap_move_probe() -> void:
 		print("[Dungeoneers] trap_move_probe skipped (no trapped_treasure on grid)")
 		print("[Dungeoneers] trap_move_probe finished phase=skipped_no_tile")
 		return
-	var path_tm := GridPath.find_path_8dir(
+	var path_tm := GridPath.find_path_4dir(
 		grid_tm,
 		spawn_tm,
 		target_tm,
@@ -2812,7 +2883,7 @@ func run_headless_room_trap_adjacent_move_probe() -> void:
 					t_eff, sc_ra, _client_unlocked_doors, _client_guards_hostile
 				):
 					continue
-				var path_ra := GridPath.find_path_8dir(
+				var path_ra := GridPath.find_path_4dir(
 					grid_ra,
 					spawn_ra,
 					sc_ra,
@@ -2847,7 +2918,7 @@ func run_headless_room_trap_adjacent_move_probe() -> void:
 
 	world_interaction_offered.connect(on_world_ra)
 	client_request_path_move(
-		GridPath.find_path_8dir(
+		GridPath.find_path_4dir(
 			grid_ra,
 			spawn_ra,
 			stand_ra,
@@ -2889,7 +2960,7 @@ func run_headless_encounter_probe() -> void:
 			if stand_ev.x < 0:
 				continue
 			if stand_ev != spawn_ev:
-				var path_ev := GridPath.find_path_8dir(
+				var path_ev := GridPath.find_path_4dir(
 					grid_ev,
 					spawn_ev,
 					stand_ev,
@@ -2930,7 +3001,7 @@ func run_headless_combat_probe() -> void:
 			if stand_cb.x < 0:
 				continue
 			if stand_cb != spawn_cb:
-				var path_cb := GridPath.find_path_8dir(
+				var path_cb := GridPath.find_path_4dir(
 					grid_cb,
 					spawn_cb,
 					stand_cb,
@@ -2995,7 +3066,7 @@ func run_headless_labels_probe() -> void:
 					if stand_lb.x < 0:
 						continue
 					if stand_lb != spawn_lb:
-						var path_lb := GridPath.find_path_8dir(
+						var path_lb := GridPath.find_path_4dir(
 							grid_lb,
 							spawn_lb,
 							stand_lb,
@@ -3350,10 +3421,25 @@ func _apply_authorized_move(
 	_torch_tick_after_move(sender, target)
 	print("[Dungeoneers] move accepted peer_id=", sender, " cell=", target)
 	_notify_client_player_sync(sender, target)
-	var traps_modal := _server_maybe_post_move_traps(sender, target)
-	var pickup_modal := _server_maybe_post_move_pickup(sender, target)
-	var sf_modal := _server_maybe_post_move_special_feature(sender, target, allow_post_move_prompts)
-	if not traps_modal and not pickup_modal and not sf_modal:
+	var trap_blk: Dictionary = _server_post_move_trap_modals_blocking_encounter(sender, target)
+	var trap_show: bool = bool(trap_blk.get("showed_modal", false))
+	var trap_blocks_enc: bool = bool(trap_blk.get("blocks_adjacent_encounter", false))
+	var enc_modal := false
+	if not trap_blocks_enc:
+		enc_modal = _server_maybe_post_move_adjacent_encounter(
+			sender, target, allow_post_move_prompts
+		)
+	var treasure_modal := false
+	if not trap_show and not enc_modal:
+		treasure_modal = _server_maybe_post_move_plain_treasure_discovery(sender, target)
+	var traps_modal: bool = trap_show or treasure_modal
+	var pickup_modal := false
+	if not traps_modal and not enc_modal:
+		pickup_modal = _server_maybe_post_move_pickup(sender, target)
+	var sf_modal := false
+	if not traps_modal and not enc_modal:
+		sf_modal = _server_maybe_post_move_special_feature(sender, target, allow_post_move_prompts)
+	if not traps_modal and not enc_modal and not pickup_modal and not sf_modal:
 		_server_maybe_post_move_stand_navigation(sender, target, allow_post_move_prompts)
 	_server_scan_secret_doors_after_move(sender, target)
 	_server_process_monster_turns_after_player(sender)
@@ -3456,9 +3542,9 @@ func _server_try_adjacent_move(sender: int, target: Vector2i) -> bool:
 		return false
 	_server_cancel_pending_path_move(sender)
 	var cur: Vector2i = _player_positions[sender]
-	if not GridWalk.is_king_adjacent(cur, target):
+	if not GridWalk.is_orthogonal_adjacent(cur, target):
 		print(
-			"[Dungeoneers] move rejected: not adjacent peer_id=",
+			"[Dungeoneers] move rejected: not orthogonally adjacent peer_id=",
 			sender,
 			" from=",
 			cur,
@@ -4868,9 +4954,9 @@ func _server_validate_path_move_build(sender: int, path: PackedVector2Array) -> 
 	var door_after: Variant = null
 	for i in range(path.size()):
 		var target := Vector2i(int(path[i].x), int(path[i].y))
-		if not GridWalk.is_king_adjacent(cur, target):
+		if not GridWalk.is_orthogonal_adjacent(cur, target):
 			print(
-				"[Dungeoneers] path move rejected: not adjacent peer_id=",
+				"[Dungeoneers] path move rejected: not orthogonally adjacent peer_id=",
 				sender,
 				" step=",
 				i,
@@ -4961,8 +5047,8 @@ func _server_path_move_tick(sender: int, serial: int) -> void:
 		_server_cancel_pending_path_move(sender)
 		return
 	var cur: Vector2i = _player_positions[sender]
-	if not GridWalk.is_king_adjacent(cur, nxt):
-		print("[Dungeoneers] path move aborted: not adjacent peer_id=", sender)
+	if not GridWalk.is_orthogonal_adjacent(cur, nxt):
+		print("[Dungeoneers] path move aborted: not orthogonally adjacent peer_id=", sender)
 		_server_cancel_pending_path_move(sender)
 		return
 	var revealed: Dictionary = _revealed_for_peer(sender)

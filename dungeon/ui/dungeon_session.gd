@@ -187,6 +187,10 @@ var _cb_secret_doors_delta: Callable
 var _cb_fog_clicked_snap: Callable
 var _cb_fog_clicked_delta: Callable
 var _net_view_signals_bound: bool = false
+## Hold-to-walk: fixed interval from held keys (no OS key-repeat / echo buffering).
+## Slower than path-follow cadence (`PATH_MOVE_STEP_SEC` 0.072) so hold-repeat feels comfortable.
+const _HOLD_MOVE_STEP_SEC := 0.144
+var _hold_move_repeat_accum: float = 0.0
 var _secret_door_notice: AcceptDialog = null
 var _stats_layer: CanvasLayer = null
 var _stats_hud_root: Control = null
@@ -418,6 +422,7 @@ func start_from_grid(
 		_ensure_door_prompt_window()
 		_ensure_encounter_choice_window()
 		set_process_unhandled_input(true)
+		set_process(true)
 		view.cell_clicked.connect(func(c: Vector2i) -> void: _on_net_grid_clicked(c, net_rep, view))
 		_explorer_audio().start_wander_music_from_seed(seed_for_log)
 		if net_rep.has_method("guards_hostile"):
@@ -4152,7 +4157,7 @@ func _on_net_grid_clicked(c: Vector2i, net_rep: Node, view: Node2D) -> void:
 					view.clear_path_preview()
 				net_rep.client_request_world_interaction(c.x, c.y)
 				return
-	var path := GridPathfinding.find_path_8dir(
+	var path := GridPathfinding.find_path_4dir(
 		_path_grid,
 		_net_local_cell,
 		click_goal,
@@ -4186,6 +4191,23 @@ func _on_net_grid_clicked(c: Vector2i, net_rep: Node, view: Node2D) -> void:
 		net_rep.client_request_path_move(path)
 
 
+func _process(delta: float) -> void:
+	if _net_rep == null or _local_peer_id < 0:
+		return
+	if _modal_blocks_grid_input():
+		_hold_move_repeat_accum = 0.0
+		return
+	var d := _keyboard_sample_move_dir()
+	if d == Vector2i.ZERO:
+		_hold_move_repeat_accum = 0.0
+		return
+	_hold_move_repeat_accum += delta
+	if _hold_move_repeat_accum < _HOLD_MOVE_STEP_SEC:
+		return
+	_hold_move_repeat_accum = 0.0
+	_try_keyboard_step(d)
+
+
 func _on_net_player_position(
 	peer_id: int, cell: Vector2i, role: String, torch_burn_pct: int, view: Node2D
 ) -> void:
@@ -4206,40 +4228,77 @@ func _on_net_player_position(
 func _unhandled_input(event: InputEvent) -> void:
 	if _net_rep == null or _local_peer_id < 0:
 		return
-	if _secret_door_notice != null and _secret_door_notice.visible:
-		return
-	if _door_window != null and _door_window.visible:
-		return
-	if _encounter_window != null and _encounter_window.visible:
-		return
-	if _encounter_res_window != null and _encounter_res_window.visible:
-		return
-	if _rumors_list_window != null and _rumors_list_window.visible:
-		return
-	if _special_items_list_window != null and _special_items_list_window.visible:
-		return
-	if _combat_window != null and _combat_window.visible:
-		return
-	if _world_dialog != null and _world_dialog.visible:
-		return
-	if _treasure_discovery_window != null and _treasure_discovery_window.visible:
-		return
-	if _label_location_window != null and _label_location_window.visible:
-		return
-	if _special_feature_window != null and _special_feature_window.visible:
-		return
-	if _map_link_window != null and _map_link_window.visible:
-		return
-	if _waypoint_window != null and _waypoint_window.visible:
-		return
-	if _stair_window != null and _stair_window.visible:
+	if _modal_blocks_grid_input():
 		return
 	var e := event as InputEventKey
 	if e == null or not e.pressed or e.echo:
 		return
 	if e.ctrl_pressed or e.alt_pressed or e.meta_pressed:
 		return
-	var d := _key_to_move_delta_from_event(e)
+	if _key_to_move_delta_from_event(e) == Vector2i.ZERO:
+		return
+	var d := _keyboard_sample_move_dir()
+	if d == Vector2i.ZERO:
+		return
+	_hold_move_repeat_accum = 0.0
+	_try_keyboard_step(d)
+	get_viewport().set_input_as_handled()
+
+
+func _modal_blocks_grid_input() -> bool:
+	if _secret_door_notice != null and _secret_door_notice.visible:
+		return true
+	if _door_window != null and _door_window.visible:
+		return true
+	if _encounter_window != null and _encounter_window.visible:
+		return true
+	if _encounter_res_window != null and _encounter_res_window.visible:
+		return true
+	if _rumors_list_window != null and _rumors_list_window.visible:
+		return true
+	if _special_items_list_window != null and _special_items_list_window.visible:
+		return true
+	if _combat_window != null and _combat_window.visible:
+		return true
+	if _world_dialog != null and _world_dialog.visible:
+		return true
+	if _treasure_discovery_window != null and _treasure_discovery_window.visible:
+		return true
+	if _label_location_window != null and _label_location_window.visible:
+		return true
+	if _special_feature_window != null and _special_feature_window.visible:
+		return true
+	if _map_link_window != null and _map_link_window.visible:
+		return true
+	if _waypoint_window != null and _waypoint_window.visible:
+		return true
+	if _stair_window != null and _stair_window.visible:
+		return true
+	return false
+
+
+## Held WASD / arrows: A over D, W over S; if both axes active, horizontal step wins (orthogonal only).
+func _keyboard_sample_move_dir() -> Vector2i:
+	var ix := 0
+	var iy := 0
+	if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
+		ix = -1
+	elif Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
+		ix = 1
+	if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
+		iy = -1
+	elif Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
+		iy = 1
+	if ix != 0 and iy != 0:
+		return Vector2i(ix, 0)
+	if ix != 0:
+		return Vector2i(ix, 0)
+	if iy != 0:
+		return Vector2i(0, iy)
+	return Vector2i.ZERO
+
+
+func _try_keyboard_step(d: Vector2i) -> void:
 	if d == Vector2i.ZERO:
 		return
 	var target := _net_local_cell + d
@@ -4249,7 +4308,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		_net_rep.client_request_door_click(target.x, target.y)
 	else:
 		_net_rep.client_request_move(target.x, target.y)
-	get_viewport().set_input_as_handled()
 
 
 ## Matches `DungeonWeb.DungeonLive.Movement` @key_directions (orthogonal only).

@@ -1,9 +1,10 @@
 extends RefCounted
 
-## 8-neighbor (king) **A\*** path on a walkable grid, optionally restricted to Explorer-style revealed cells.
+## 4-neighbor (rook) **A\*** path on a walkable grid, optionally restricted to Explorer-style revealed cells.
+## Matches Explorer web click pathfinding (orthogonal steps only — no corner-cutting diagonals).
 ## `plan_ignore_fog`: client click planning only — matches Explorer `PathfindingHook` (full walkability grid); server still validates fog per step.
-## `h` = Chebyshev distance to goal (admissible for unit-cost king steps). Open-set ties: lower `f`, then lower `h`, then lower `y`, then lower `x`.
-## Neighbor relaxation order matches historical BFS expansion (cardinals, then diagonals).
+## `h` = Manhattan distance to goal (admissible for unit-cost orthogonal steps). Open-set ties: lower `f`, then lower `h`, then lower `y`, then lower `x`.
+## Neighbor expansion order: east, west, south, north (same as legacy BFS cardinals-first block).
 
 const GridWalk := preload("res://dungeon/movement/grid_walkability.gd")
 const DungeonGrid := preload("res://dungeon/generator/grid.gd")
@@ -14,15 +15,11 @@ const _DIRS: Array[Vector2i] = [
 	Vector2i(-1, 0),
 	Vector2i(0, 1),
 	Vector2i(0, -1),
-	Vector2i(1, 1),
-	Vector2i(1, -1),
-	Vector2i(-1, 1),
-	Vector2i(-1, -1),
 ]
 
 
-static func _cheb_h(a: Vector2i, goal: Vector2i) -> int:
-	return maxi(absi(a.x - goal.x), absi(a.y - goal.y))
+static func _manhattan_h(a: Vector2i, goal: Vector2i) -> int:
+	return absi(a.x - goal.x) + absi(a.y - goal.y)
 
 
 ## Lexicographic tie-break: prefer smaller `(f, h, y, x)`.
@@ -40,7 +37,7 @@ static func _cell_better_open_than(
 
 ## When `from` and `to` share a row or column, return the unique cardinal segment if every cell on that
 ## segment is pathfinding-walkable and (when fog is on) revealed. Otherwise empty — caller falls back to A\*.
-## Avoids Chebyshev-A\* tie-break zigzags in wide open or fog-bounded corridors for straight clicks.
+## Avoids Manhattan-A\* tie-break zigzags in wide open or fog-bounded corridors for straight clicks.
 static func _try_axis_aligned_line_path(
 	grid: Dictionary,
 	from: Vector2i,
@@ -76,7 +73,7 @@ static func _try_axis_aligned_line_path(
 	return packed
 
 
-static func find_path_8dir(
+static func find_path_4dir(
 	grid: Dictionary,
 	from: Vector2i,
 	to: Vector2i,
@@ -123,12 +120,12 @@ static func find_path_8dir(
 	while not open_cells.is_empty():
 		var best_i := 0
 		var best_c: Vector2i = open_cells[0]
-		var best_f: int = int(g_score[best_c]) + _cheb_h(best_c, to)
-		var best_h: int = _cheb_h(best_c, to)
+		var best_f: int = int(g_score[best_c]) + _manhattan_h(best_c, to)
+		var best_h: int = _manhattan_h(best_c, to)
 		for j in range(1, open_cells.size()):
 			var cj: Vector2i = open_cells[j]
-			var fj: int = int(g_score[cj]) + _cheb_h(cj, to)
-			var hj: int = _cheb_h(cj, to)
+			var fj: int = int(g_score[cj]) + _manhattan_h(cj, to)
+			var hj: int = _manhattan_h(cj, to)
 			if _cell_better_open_than(fj, hj, cj, best_f, best_h, best_c):
 				best_i = j
 				best_c = cj
@@ -185,9 +182,9 @@ static func find_path_8dir(
 	return PackedVector2Array()
 
 
-## How many king-adjacent edges from `path_start` along `path` (in order) are needed to reach `end`.
-## Returns `-1` if `end` is not reachable as a prefix of `path` or if a step is not king-adjacent.
-static func king_step_count_along_path_prefix(
+## How many orthogonally adjacent edges from `path_start` along `path` (in order) are needed to reach `end`.
+## Returns `-1` if `end` is not reachable as a prefix of `path` or if a step is not a single cardinal step.
+static func orthogonal_step_count_along_path_prefix(
 	path_start: Vector2i, path: PackedVector2Array, end: Vector2i
 ) -> int:
 	if end == path_start:
@@ -195,7 +192,7 @@ static func king_step_count_along_path_prefix(
 	var cur := path_start
 	for i in range(path.size()):
 		var nxt := Vector2i(int(path[i].x), int(path[i].y))
-		if not GridWalk.is_king_adjacent(cur, nxt):
+		if not GridWalk.is_orthogonal_adjacent(cur, nxt):
 			return -1
 		cur = nxt
 		if cur == end:
@@ -203,8 +200,8 @@ static func king_step_count_along_path_prefix(
 	return -1
 
 
-## Legacy **BFS** oracle for tests: shortest king path; expansion order matches pre–CMB-01 `find_path_8dir`.
-static func find_path_8dir_bfs_reference(
+## Legacy **BFS** oracle for tests: shortest 4-dir path; expansion order matches `find_path_4dir` neighbor order.
+static func find_path_4dir_bfs_reference(
 	grid: Dictionary,
 	from: Vector2i,
 	to: Vector2i,
