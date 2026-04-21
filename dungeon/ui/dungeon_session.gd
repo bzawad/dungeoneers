@@ -2121,6 +2121,19 @@ func _apply_world_dialog_chrome() -> void:
 	var sch_w := ExplorerModalChrome.scheme_for_world_kind_title(k, t)
 	var ok_v := ExplorerModalChrome.ok_variant_for_world_kind(k, t)
 	ExplorerModalChrome.apply_accept_dialog_scheme(_world_dialog, sch_w, ok_v)
+	var cbtn: Button = _world_dialog.get_cancel_button()
+	if cbtn != null:
+		var skip_pickup := k == "food_pickup" or k == "healing_potion_pickup"
+		if skip_pickup:
+			cbtn.visible = true
+			cbtn.text = "Skip"
+			var cn_tex := _explorer_img_texture("cancel.png")
+			cbtn.icon = cn_tex
+			ExplorerModalChrome.style_button(cbtn, "secondary", false)
+			ExplorerModalChrome.tighten_button_for_modal_icon_row(cbtn)
+		else:
+			cbtn.visible = false
+			cbtn.icon = null
 
 
 func _apply_door_window_chrome() -> void:
@@ -2233,6 +2246,8 @@ func _ensure_world_interaction_dialog() -> void:
 	_world_dialog.canceled.connect(_on_world_dialog_canceled)
 	add_child(_world_dialog)
 	ExplorerModalChrome.configure_accept_dialog_body_layout(_world_dialog)
+	## Skip on food / potion pickup matches trap / feature modals (`cancel.png` + secondary).
+	_world_dialog.add_cancel_button("Skip")
 
 
 func _ensure_treasure_discovery_window() -> void:
@@ -3456,6 +3471,9 @@ func _on_world_interaction_offered(
 
 
 func _on_world_dialog_canceled() -> void:
+	var k_skip := _pending_world_kind
+	if k_skip == "food_pickup" or k_skip == "healing_potion_pickup":
+		_explorer_audio().play_click()
 	_pending_world_kind = ""
 	_pending_world_cell = Vector2i.ZERO
 	if _world_dialog != null:
