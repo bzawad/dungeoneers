@@ -137,6 +137,8 @@ var _encounter_res_title_label: Label = null
 var _encounter_res_body_label: Label = null
 var _encounter_res_ok_btn: Button = null
 var _encounter_res_last_title: String = ""
+## When server sends `treasure` while trap resolution is still open, show after OK (Explorer ordering).
+var _pending_treasure_pickup_after_trap: Dictionary = {}
 var _level_up_dialog: AcceptDialog = null
 var _combat_window: Window = null
 var _combat_title_label: Label = null
@@ -350,6 +352,7 @@ func start_from_grid(
 		_client_unlocked.clear()
 		_client_fog_clicked.clear()
 		_trap_defused.clear()
+		_pending_treasure_pickup_after_trap.clear()
 		if _welcome_fog_on:
 			var r_rooms: Array = []
 			if welcome.get("rooms", []) is Array:
@@ -1106,6 +1109,7 @@ func _on_encounter_evade_pressed() -> void:
 func _on_encounter_resolution_dialog(title: String, message: String) -> void:
 	_pending_victory_treasure_gold = 0
 	if title == "Death":
+		_pending_treasure_pickup_after_trap.clear()
 		_show_death_dialog(message)
 		return
 	_show_encounter_resolution_modal(title, message)
@@ -1156,6 +1160,8 @@ func _dismiss_encounter_resolution_modal() -> void:
 		var fc := _last_encounter_fight_cell
 		if fc != Vector2i.ZERO:
 			_net_rep.client_request_encounter_fight(fc.x, fc.y)
+	if dlg_title == "Trap triggered" or dlg_title == "Trap disarmed":
+		_flush_pending_treasure_pickup_after_trap_if_any()
 	_pending_victory_treasure_gold = 0
 
 
@@ -1876,6 +1882,11 @@ func _on_combat_state_changed(snapshot: Dictionary) -> void:
 	if _net_rep == null:
 		return
 	_combat_last_snapshot = snapshot.duplicate(true)
+	## Match Explorer `CombatSystem.start_combat` closing the encounter sheet: any in-flight
+	## `world_interaction` encounter offer must not stay above combat (or pop after it ends).
+	if not bool(snapshot.get("finished", false)):
+		_hide_encounter_choice_window()
+		_pending_encounter_cell = Vector2i.ZERO
 	if bool(snapshot.get("finished", false)):
 		_play_combat_sfx_from_snapshot(snapshot)
 		_ensure_combat_window()
@@ -2277,6 +2288,34 @@ func _ensure_treasure_discovery_window() -> void:
 	row_td.add_child(_treasure_discovery_collect_btn)
 	vb_td.add_child(row_td)
 	_apply_treasure_discovery_window_chrome()
+
+
+func _present_treasure_pickup_dialog(cell: Vector2i, title: String, message: String) -> void:
+	_pending_world_kind = "treasure"
+	_pending_world_cell = cell
+	_ensure_treasure_discovery_window()
+	if _treasure_discovery_title_lbl != null:
+		_treasure_discovery_title_lbl.text = title
+	if _treasure_discovery_body != null:
+		_treasure_discovery_body.text = message
+	if _treasure_discovery_icon != null:
+		var tg_td := _explorer_img_texture("gold.png")
+		_treasure_discovery_icon.texture = tg_td
+		_treasure_discovery_icon.visible = tg_td != null
+	_apply_treasure_discovery_window_chrome()
+	_explorer_audio().play_chest_open()
+	_treasure_discovery_window.popup_centered()
+	_set_grid_hover_polish_for_modal(true)
+
+
+func _flush_pending_treasure_pickup_after_trap_if_any() -> void:
+	if not _pending_treasure_pickup_after_trap.has("cell"):
+		return
+	var c: Vector2i = _pending_treasure_pickup_after_trap["cell"]
+	var ttl: String = str(_pending_treasure_pickup_after_trap.get("title", ""))
+	var msg: String = str(_pending_treasure_pickup_after_trap.get("message", ""))
+	_pending_treasure_pickup_after_trap.clear()
+	_present_treasure_pickup_dialog(c, ttl, msg)
 
 
 func _apply_treasure_discovery_window_chrome() -> void:
@@ -3172,6 +3211,8 @@ func _active_quest_count() -> int:
 func _on_player_rumors_updated(rumors: PackedStringArray) -> void:
 	_rumors_lines = rumors
 	_refresh_stats_hud_text()
+	if _rumors_list_window != null and _rumors_list_window.visible:
+		_refresh_rumors_list_items()
 
 
 func _on_player_special_items_updated(keys: PackedStringArray) -> void:
@@ -3295,21 +3336,21 @@ func _on_world_interaction_offered(
 		_set_grid_hover_polish_for_modal(true)
 		return
 	if kind == "treasure":
-		_pending_world_kind = kind
-		_pending_world_cell = cell
-		_ensure_treasure_discovery_window()
-		if _treasure_discovery_title_lbl != null:
-			_treasure_discovery_title_lbl.text = title
-		if _treasure_discovery_body != null:
-			_treasure_discovery_body.text = message
-		if _treasure_discovery_icon != null:
-			var tg_td := _explorer_img_texture("gold.png")
-			_treasure_discovery_icon.texture = tg_td
-			_treasure_discovery_icon.visible = tg_td != null
-		_apply_treasure_discovery_window_chrome()
-		_explorer_audio().play_chest_open()
-		_treasure_discovery_window.popup_centered()
-		_set_grid_hover_polish_for_modal(true)
+		if (
+			_encounter_res_window != null
+			and _encounter_res_window.visible
+			and (
+				_encounter_res_last_title == "Trap triggered"
+				or _encounter_res_last_title == "Trap disarmed"
+			)
+		):
+			_pending_treasure_pickup_after_trap = {
+				"cell": cell,
+				"title": title,
+				"message": message,
+			}
+			return
+		_present_treasure_pickup_dialog(cell, title, message)
 		return
 	if kind == "waypoint":
 		_pending_world_kind = "waypoint"

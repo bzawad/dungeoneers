@@ -2274,6 +2274,7 @@ func _server_fire_pending_monster_strike(peer_id: int, serial: int) -> void:
 
 
 func _server_handle_encounter_fight(sender: int, cell: Vector2i) -> void:
+	_server_cancel_pending_monster_combat_delay_for_peer(sender)
 	_server_pending_npc_quest.erase(sender)
 	if not _server_encounter_cell_ok(sender, cell):
 		return
@@ -2381,8 +2382,13 @@ func _server_handle_npc_quest_accept(sender: int) -> void:
 	_server_pending_npc_quest.erase(sender)
 	if not _player_positions.has(sender):
 		return
-	if _player_positions[sender] != cell_p:
-		print("[Dungeoneers] npc_quest_accept rejected: not on offer cell peer_id=", sender)
+	var pos_accept: Vector2i = _player_positions[sender] as Vector2i
+	## Match `GridWalk.should_remote_world_interaction_click` for `"encounter"` (king-adjacent)
+	## plus same-cell (NPC/guard encounter tiles can be walkable).
+	if pos_accept != cell_p and not GridWalk.is_king_adjacent(pos_accept, cell_p):
+		print(
+			"[Dungeoneers] npc_quest_accept rejected: not adjacent to offer cell peer_id=", sender
+		)
 		return
 	var eff_p: String = _authority_effective_tile(cell_p)
 	if GridWalk.world_interaction_remote_kind(eff_p) != "encounter":
@@ -3470,6 +3476,13 @@ func _server_monster_combat_delay_serial_bump(mover_peer: int) -> int:
 	return nxt
 
 
+## Invalidate any `SceneTreeTimer` from `_server_schedule_encounter_fight_delayed` for this peer
+## (Explorer CMB-02 parity) so a delayed hunter strike cannot start combat after the player already did.
+func _server_cancel_pending_monster_combat_delay_for_peer(peer_id: int) -> void:
+	var cur := int(_monster_combat_delay_serial_by_peer.get(peer_id, 0))
+	_monster_combat_delay_serial_by_peer[peer_id] = cur + 1
+
+
 func _server_invalidate_monster_combat_delay_timers() -> void:
 	_monster_combat_delay_serial_by_peer.clear()
 
@@ -3827,8 +3840,12 @@ func _server_handle_trapped_treasure_undetected_ack(sender: int, cell: Vector2i)
 		return
 	var rng_u := _rng_door_cell(sender, cell, 313)
 	var dmg_u: int = rng_u.randi_range(1, 2)
-	_server_convert_trapped_treasure_to_treasure(cell)
 	var hp_u: int = _server_apply_hp_damage_to_peer(sender, dmg_u)
+	_deliver_encounter_resolution_to_peer(
+		sender,
+		"Trap triggered",
+		"The poisoned needle bites deep!\n\nYou take " + str(dmg_u) + " damage.",
+	)
 	print(
 		"[Dungeoneers] trapped_treasure_undetected_ack peer_id=",
 		sender,
@@ -3837,14 +3854,15 @@ func _server_handle_trapped_treasure_undetected_ack(sender: int, cell: Vector2i)
 		" hp=",
 		hp_u
 	)
-	if hp_u > 0:
-		_server_offer_plain_treasure_pickup(sender, cell)
-	else:
+	if hp_u <= 0:
 		_deliver_encounter_resolution_to_peer(
 			sender,
 			"Death",
-			"The poisoned needle was the last thing you felt. Your adventure ends here."
+			"The poisoned needle was the last thing you felt. Your adventure ends here.",
 		)
+	_server_convert_trapped_treasure_to_treasure(cell)
+	if hp_u > 0:
+		_server_offer_plain_treasure_pickup(sender, cell)
 
 
 func _server_handle_trapped_treasure_skip_disarm(sender: int, cell: Vector2i) -> void:
@@ -4302,6 +4320,7 @@ func _server_handle_feature_trap_dismiss(sender: int) -> void:
 
 
 func _server_start_combat_with_monster(sender: int, rng_cell: Vector2i, mname: String) -> void:
+	_server_cancel_pending_monster_combat_delay_for_peer(sender)
 	_server_pending_npc_quest.erase(sender)
 	if not _player_positions.has(sender):
 		return
