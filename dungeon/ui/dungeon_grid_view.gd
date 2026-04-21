@@ -236,8 +236,7 @@ func setup_from_grid(
 	for y in DungeonGrid.MAP_HEIGHT:
 		for x in DungeonGrid.MAP_WIDTH:
 			var cell := Vector2i(x, y)
-			var s: String = str(grid.get(cell, "wall"))
-			_paint_cell(cell, s)
+			_paint_cell(cell)
 
 	_build_cell_labels(grid)
 
@@ -503,17 +502,39 @@ func apply_trap_inspected_doors_delta(cells: PackedVector2Array) -> void:
 	_refresh_door_overlays()
 
 
+func apply_trap_inspected_doors_remove_delta(cells: PackedVector2Array) -> void:
+	for i in range(cells.size()):
+		_client_trap_inspected_doors.erase(Vector2i(int(cells[i].x), int(cells[i].y)))
+	_refresh_door_overlays()
+
+
 func apply_trap_defused_doors_snapshot(cells: PackedVector2Array) -> void:
 	_client_trap_defused_doors.clear()
 	for i in range(cells.size()):
 		_client_trap_defused_doors[Vector2i(int(cells[i].x), int(cells[i].y))] = true
 	_refresh_door_overlays()
+	_repaint_revealed_trap_defused_cells(cells)
 
 
 func apply_trap_defused_doors_delta(cells: PackedVector2Array) -> void:
 	for i in range(cells.size()):
 		_client_trap_defused_doors[Vector2i(int(cells[i].x), int(cells[i].y))] = true
 	_refresh_door_overlays()
+	_repaint_revealed_trap_defused_cells(cells)
+
+
+func _repaint_revealed_trap_defused_cells(cells: PackedVector2Array) -> void:
+	if _tile_layer == null:
+		return
+	for i in range(cells.size()):
+		var cell := Vector2i(int(cells[i].x), int(cells[i].y))
+		if _fog_enabled and not _revealed.get(cell, false):
+			continue
+		_paint_cell(cell)
+		_refresh_label_visibility(cell, true)
+	if cells.size() > 0:
+		_sync_encounter_monster_tokens()
+		_sync_map_cell_overlays()
 
 
 func _refresh_door_overlays() -> void:
@@ -610,7 +631,7 @@ func apply_logical_tile_change(cell: Vector2i, s: String) -> void:
 		_sync_encounter_monster_tokens()
 		_sync_map_cell_overlays()
 		return
-	_paint_cell(cell, s)
+	_paint_cell(cell)
 	_refresh_door_overlays()
 	# If a tile patch removes a labelled cell (e.g. room_trap → floor), hide the label.
 	_refresh_label_visibility(cell, true)
@@ -618,7 +639,13 @@ func apply_logical_tile_change(cell: Vector2i, s: String) -> void:
 	_sync_map_cell_overlays()
 
 
-func _paint_cell(cell: Vector2i, s: String) -> void:
+## Explorer `remove_detected_trap` mutates grid; Dungeoneers keeps raw tiles + `trap_defused` — paint effective tiles on the map.
+func _display_tile_for_cell(cell: Vector2i) -> String:
+	return GridWalk.tile_effective(_logical_grid, cell, _client_trap_defused_doors)
+
+
+func _paint_cell(cell: Vector2i) -> void:
+	var s: String = _display_tile_for_cell(cell)
 	if _use_bundled_pngs:
 		var tid := DungeonTileAssets.terrain_source_id(s, _generation_type)
 		if tid < 0:
@@ -673,7 +700,7 @@ func _refresh_all_cells() -> void:
 			else:
 				if _terrain_under_fog_layer != null:
 					_terrain_under_fog_layer.erase_cell(cell)
-				_paint_cell(cell, s)
+				_paint_cell(cell)
 			_refresh_label_visibility(cell, is_revealed)
 	_refresh_door_overlays()
 	_sync_encounter_monster_tokens()

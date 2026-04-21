@@ -96,6 +96,20 @@ static func apply_accept_dialog_scheme(
 		style_button(ok, ok_variant, false)
 
 
+## `ConfirmationDialog` follows host OS button order (often Cancel left, OK right). Explorer modals use
+## **primary left, Skip / Cancel right** (same as custom `HBoxContainer` footers in `dungeon_session`).
+static func arrange_confirmation_footer_primary_left_cancel_right(
+	ok_btn: Button, cancel_btn: Button
+) -> void:
+	if ok_btn == null or cancel_btn == null:
+		return
+	var p := ok_btn.get_parent()
+	if p == null or cancel_btn.get_parent() != p:
+		return
+	if ok_btn.get_index() > cancel_btn.get_index():
+		p.move_child(ok_btn, cancel_btn.get_index())
+
+
 ## Cap width and wrap body text like Explorer `DialogComponent` (`max-w-lg` + `whitespace-pre-wrap`).
 static func configure_accept_dialog_body_layout(
 	d: AcceptDialog, max_width_px: int = DIALOG_MAX_W_PX
@@ -290,10 +304,8 @@ static func scheme_for_door_action(action: String, message: String) -> String:
 			if msg.contains("fail") or msg.contains("damage"):
 				return "red"
 			return "green"
-		"trap_sprung", "door_trap_survey":
+		"trap_sprung", "trap_detected":
 			return "red"
-		"trap_detected":
-			return "yellow"
 		_:
 			return "gray"
 

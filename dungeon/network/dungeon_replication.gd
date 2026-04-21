@@ -75,6 +75,8 @@ signal unpickable_doors_snapshot(cells: PackedVector2Array)
 signal unpickable_doors_delta(cells: PackedVector2Array)
 signal trap_inspected_doors_snapshot(cells: PackedVector2Array)
 signal trap_inspected_doors_delta(cells: PackedVector2Array)
+## Explorer `skip_detected_trap` — clear trap-inspected overlay so detection can roll again.
+signal trap_inspected_doors_remove_delta(cells: PackedVector2Array)
 ## Door trap removed after disarm (Explorer `remove_detected_trap` → `locked_door` / `door`).
 signal trap_defused_doors_snapshot(cells: PackedVector2Array)
 signal trap_defused_doors_delta(cells: PackedVector2Array)
@@ -548,6 +550,16 @@ func _notify_trap_inspected_doors_delta(cells: PackedVector2Array) -> void:
 		trap_inspected_doors_delta.emit(cells)
 	elif multiplayer.multiplayer_peer != null and multiplayer.is_server():
 		rpc_trap_inspected_doors_delta.rpc(cells)
+
+
+func _notify_trap_inspected_doors_remove_delta(cells: PackedVector2Array) -> void:
+	if _using_solo_local():
+		for i in range(cells.size()):
+			var vit := Vector2i(int(cells[i].x), int(cells[i].y))
+			_client_trap_inspected_doors.erase(vit)
+		trap_inspected_doors_remove_delta.emit(cells)
+	elif multiplayer.multiplayer_peer != null and multiplayer.is_server():
+		rpc_trap_inspected_doors_remove_delta.rpc(cells)
 
 
 func _notify_trap_defused_doors_delta(cells: PackedVector2Array) -> void:
@@ -2514,9 +2526,7 @@ func run_headless_door_unlock_probe() -> void:
 			var on_prompt := func(offered_action: String, cell: Vector2i, _msg: String) -> void:
 				if probe_state[0] != "live" or cell != door_cell:
 					return
-				if offered_action == "door_trap_survey":
-					client_request_door_confirm("door_trap_survey", cell.x, cell.y)
-				elif offered_action == "trap_detected":
+				if offered_action == "trap_detected":
 					client_request_door_confirm("trap_disarm", cell.x, cell.y)
 				elif offered_action == "trap_disarm_result":
 					client_request_door_confirm("trap_disarm_ack", cell.x, cell.y)
@@ -5277,6 +5287,49 @@ func _server_handle_unlock_door(sender: int, cell: Vector2i) -> void:
 	print("[Dungeoneers] door unlock accepted peer_id=", sender, " cell=", cell)
 
 
+## Explorer `attempt_trap_detection` — roll immediately on door click (no separate survey confirm).
+func _server_roll_door_trap_detection(sender: int, cell: Vector2i, _raw_t: String) -> void:
+	var rng_t := _rng_door_cell(sender, cell, 31)
+	var det: int = rng_t.randi_range(1, 20)
+	_door_trap_checked[cell] = true
+	_server_broadcast_trap_inspected(cell)
+	if det >= DOOR_TRAP_DETECT_DC:
+		_trap_disarm_pending[cell] = true
+		_deliver_door_prompt_to_peer(
+			sender,
+			"trap_detected",
+			cell,
+			(
+				"You notice something suspicious about this door - there appears to be a trap mechanism! "
+				+ "(Detected with roll "
+				+ str(det)
+				+ " vs DC "
+				+ str(DOOR_TRAP_DETECT_DC)
+				+ ")\n\nWhat would you like to do?"
+			)
+		)
+	else:
+		var dmg: int = rng_t.randi_range(1, 2)
+		var msg_bad := (
+			"You failed to spot the trap in time! (Detection roll "
+			+ str(det)
+			+ " vs DC "
+			+ str(DOOR_TRAP_DETECT_DC)
+			+ ")\n\nA needle snicks out — you take "
+			+ str(dmg)
+			+ " damage."
+		)
+		var hp_survey: int = _server_apply_hp_damage_to_peer(sender, dmg)
+		if hp_survey <= 0:
+			_deliver_encounter_resolution_to_peer(sender, "Trap triggered", msg_bad)
+			_deliver_encounter_resolution_to_peer(
+				sender, "Death", "The poison runs cold — you collapse."
+			)
+		else:
+			_deliver_door_prompt_to_peer(sender, "trap_sprung", cell, msg_bad)
+	print("[Dungeoneers] trap survey peer_id=", sender, " cell=", cell, " det_roll=", det)
+
+
 func _server_handle_door_click(sender: int, cell: Vector2i) -> void:
 	if not _server_door_click_valid(sender, cell):
 		return
@@ -5287,11 +5340,7 @@ func _server_handle_door_click(sender: int, cell: Vector2i) -> void:
 			sender,
 			"trap_detected",
 			cell,
-			(
-				"You spotted a trap on this door earlier.\n\nAttempt to disarm? Rolls d20 + DEX vs DC "
-				+ str(TRAP_DISARM_DC)
-				+ ". Confirm to roll."
-			)
+			"You spotted a trap on this door earlier.\n\nWhat would you like to do?"
 		)
 		print("[Dungeoneers] door_click re-offer trap_detected peer_id=", sender, " cell=", cell)
 		return
@@ -5321,17 +5370,7 @@ func _server_handle_door_click(sender: int, cell: Vector2i) -> void:
 		and not _trap_defused_doors.has(cell)
 		and not _door_trap_checked.has(cell)
 	):
-		_deliver_door_prompt_to_peer(
-			sender,
-			"door_trap_survey",
-			cell,
-			(
-				"You examine the door for hidden traps. Confirm to roll detection (d20 vs DC "
-				+ str(DOOR_TRAP_DETECT_DC)
-				+ ")."
-			)
-		)
-		print("[Dungeoneers] door_click offer door_trap_survey peer_id=", sender, " cell=", cell)
+		_server_roll_door_trap_detection(sender, cell, raw_t)
 		return
 	if GridWalk.is_locked_door_tile(t) and not _unlocked_doors.has(cell):
 		_deliver_door_prompt_to_peer(sender, "unlock", cell, _unlock_prompt_message(cell, sender))
@@ -5354,6 +5393,17 @@ func _server_handle_door_confirm(sender: int, action: String, cell: Vector2i) ->
 	var raw_t: String = GridWalk.tile_at(_authority_grid, cell)
 	var t: String = _authority_effective_tile(cell)
 	if action == "blocked":
+		return
+	if action == "trap_skip_disarm":
+		if not _trap_disarm_pending.has(cell):
+			print("[Dungeoneers] trap_skip_disarm rejected: not pending cell=", cell)
+			return
+		_trap_disarm_pending.erase(cell)
+		_door_trap_checked.erase(cell)
+		var rm_inspected := PackedVector2Array()
+		rm_inspected.append(Vector2(cell))
+		_notify_trap_inspected_doors_remove_delta(rm_inspected)
+		print("[Dungeoneers] trap_skip_disarm peer_id=", sender, " cell=", cell)
 		return
 	if action == "trap_disarm_ack":
 		if not _door_trap_checked.has(cell) or _trap_disarm_pending.has(cell):
@@ -5390,13 +5440,13 @@ func _server_handle_door_confirm(sender: int, action: String, cell: Vector2i) ->
 					+ str(d20v)
 					+ " + "
 					+ str(bonus)
-					+ " DEX = "
+					+ " dexterity = "
 					+ str(tot)
 					+ " vs DC "
 					+ str(TRAP_DISARM_DC)
-					+ ")\n\nThe trap is now safe to pass (+"
+					+ ")\n\nThe trap is now safe to pass.\n\nYou gain "
 					+ str(TRAP_DISARM_XP_TREASURE)
-					+ " XP)."
+					+ " XP."
 				)
 			)
 			print("[Dungeoneers] trap disarm success peer_id=", sender, " cell=", cell)
@@ -5408,7 +5458,7 @@ func _server_handle_door_confirm(sender: int, action: String, cell: Vector2i) ->
 				+ str(d20v)
 				+ " + "
 				+ str(bonus)
-				+ " DEX = "
+				+ " dexterity = "
 				+ str(tot)
 				+ " vs DC "
 				+ str(TRAP_DISARM_DC)
@@ -5501,44 +5551,6 @@ func _server_handle_door_confirm(sender: int, action: String, cell: Vector2i) ->
 				)
 			)
 			print("[Dungeoneers] break_door fail peer_id=", sender, " cell=", cell, " roll=", br)
-		return
-	if action == "door_trap_survey":
-		if not GridWalk.is_trapped_door_tile(raw_t):
-			print("[Dungeoneers] door_confirm door_trap_survey rejected: tile=", raw_t)
-			return
-		var rng_t := _rng_door_cell(sender, cell, 31)
-		var det: int = rng_t.randi_range(1, 20)
-		_door_trap_checked[cell] = true
-		_server_broadcast_trap_inspected(cell)
-		if det >= DOOR_TRAP_DETECT_DC:
-			_trap_disarm_pending[cell] = true
-			_deliver_door_prompt_to_peer(
-				sender,
-				"trap_detected",
-				cell,
-				(
-					"You notice something suspicious about this door — a trap mechanism! (Detected with roll "
-					+ str(det)
-					+ " vs DC "
-					+ str(DOOR_TRAP_DETECT_DC)
-					+ ")\n\nAttempt to disarm? Rolls d20 + DEX vs DC "
-					+ str(TRAP_DISARM_DC)
-					+ ". Confirm to roll."
-				)
-			)
-		else:
-			var dmg: int = rng_t.randi_range(1, 2)
-			var msg_bad := (
-				"You failed to spot the trap in time! (Detection roll "
-				+ str(det)
-				+ " vs DC "
-				+ str(DOOR_TRAP_DETECT_DC)
-				+ ")\n\nA needle snicks out — you take "
-				+ str(dmg)
-				+ " damage."
-			)
-			_deliver_door_prompt_to_peer(sender, "trap_sprung", cell, msg_bad)
-		print("[Dungeoneers] trap survey peer_id=", sender, " cell=", cell, " det_roll=", det)
 		return
 	if action == "unlock":
 		if not GridWalk.is_locked_door_tile(t):
@@ -6088,6 +6100,16 @@ func rpc_trap_inspected_doors_delta(cells: PackedVector2Array) -> void:
 		var vi := Vector2i(int(cells[i].x), int(cells[i].y))
 		_client_trap_inspected_doors[vi] = true
 	trap_inspected_doors_delta.emit(cells)
+
+
+@rpc("authority", "call_remote", "reliable")
+func rpc_trap_inspected_doors_remove_delta(cells: PackedVector2Array) -> void:
+	if multiplayer.is_server():
+		return
+	for i in range(cells.size()):
+		var vi := Vector2i(int(cells[i].x), int(cells[i].y))
+		_client_trap_inspected_doors.erase(vi)
+	trap_inspected_doors_remove_delta.emit(cells)
 
 
 @rpc("authority", "call_remote", "reliable")

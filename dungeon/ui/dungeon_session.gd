@@ -48,6 +48,9 @@ var _door_pass_cancel_btn: Button = null
 var _door_unlock_row: HBoxContainer = null
 var _door_pick_lock_btn: Button = null
 var _door_unlock_cancel_btn: Button = null
+var _door_trap_row: HBoxContainer = null
+var _door_trap_disarm_btn: Button = null
+var _door_trap_skip_btn: Button = null
 var _label_location_window: Window = null
 var _label_location_icon: TextureRect = null
 var _label_location_title_lbl: Label = null
@@ -56,7 +59,7 @@ var _label_location_continue_btn: Button = null
 var _pending_door_action: String = ""
 var _pending_door_cell: Vector2i = Vector2i.ZERO
 var _trap_defused: Dictionary = {}
-var _world_dialog: AcceptDialog = null
+var _world_dialog: ConfirmationDialog = null
 var _pending_world_kind: String = ""
 var _pending_world_cell: Vector2i = Vector2i.ZERO
 var _treasure_discovery_window: Window = null
@@ -397,6 +400,7 @@ func start_from_grid(
 		net_rep.unlocked_doors_delta.connect(_on_unlocked_doors_delta)
 		net_rep.trap_inspected_doors_snapshot.connect(_on_trap_inspected_doors_snapshot)
 		net_rep.trap_inspected_doors_delta.connect(_on_trap_inspected_doors_delta)
+		net_rep.trap_inspected_doors_remove_delta.connect(_on_trap_inspected_doors_remove_delta)
 		net_rep.trap_defused_doors_snapshot.connect(_on_trap_defused_doors_snapshot)
 		net_rep.trap_defused_doors_delta.connect(_on_trap_defused_doors_delta)
 		net_rep.door_prompt_offered.connect(_on_door_prompt_offered)
@@ -687,6 +691,24 @@ func _ensure_door_prompt_window() -> void:
 	_door_unlock_cancel_btn.pressed.connect(_on_door_cancel_pressed)
 	_door_unlock_row.add_child(_door_unlock_cancel_btn)
 	vb.add_child(_door_unlock_row)
+
+	_door_trap_row = HBoxContainer.new()
+	_door_trap_row.visible = false
+	_door_trap_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_door_trap_row.add_theme_constant_override(&"separation", 16)
+	_door_trap_disarm_btn = Button.new()
+	_door_trap_disarm_btn.text = "Disarm"
+	if lp_tex != null:
+		_door_trap_disarm_btn.icon = lp_tex
+	_door_trap_disarm_btn.pressed.connect(_on_door_trap_disarm_pressed)
+	_door_trap_row.add_child(_door_trap_disarm_btn)
+	_door_trap_skip_btn = Button.new()
+	_door_trap_skip_btn.text = "Skip"
+	if cn_tex != null:
+		_door_trap_skip_btn.icon = cn_tex
+	_door_trap_skip_btn.pressed.connect(_on_door_trap_skip_pressed)
+	_door_trap_row.add_child(_door_trap_skip_btn)
+	vb.add_child(_door_trap_row)
 
 	_door_break_row = HBoxContainer.new()
 	_door_break_row.visible = false
@@ -1817,6 +1839,8 @@ func _apply_door_action_buttons_compact() -> void:
 		_door_pass_cancel_btn,
 		_door_pick_lock_btn,
 		_door_unlock_cancel_btn,
+		_door_trap_disarm_btn,
+		_door_trap_skip_btn,
 		_door_break_btn,
 		_door_cancel_btn,
 		_door_ok_button,
@@ -2034,6 +2058,11 @@ func _on_trap_inspected_doors_delta(cells: PackedVector2Array) -> void:
 		_grid_view.call("apply_trap_inspected_doors_delta", cells)
 
 
+func _on_trap_inspected_doors_remove_delta(cells: PackedVector2Array) -> void:
+	if _grid_view != null and _grid_view.has_method("apply_trap_inspected_doors_remove_delta"):
+		_grid_view.call("apply_trap_inspected_doors_remove_delta", cells)
+
+
 func _on_trap_defused_doors_snapshot(cells: PackedVector2Array) -> void:
 	_trap_defused.clear()
 	for i in range(cells.size()):
@@ -2056,7 +2085,9 @@ func _door_dialog_title_for_action(action: String) -> String:
 		"unlock", "break_door", "break_result":
 			return "Unlock Door"
 		"trap_sprung":
-			return "Trap"
+			return "Trap Triggered!"
+		"trap_detected":
+			return "You've found a trap!"
 		_:
 			return "Door"
 
@@ -2069,6 +2100,11 @@ func _on_door_prompt_offered(action: String, cell: Vector2i, message: String) ->
 	_pending_door_cell = cell
 	_door_message.text = message
 	var title_str := _door_dialog_title_for_action(action)
+	if action == "trap_disarm_result":
+		if message.to_lower().contains("successfully disarm"):
+			title_str = "Trap Disarmed!"
+		else:
+			title_str = "Trap Triggered!"
 	if _door_title_label != null:
 		_door_title_label.text = title_str
 	if _door_window != null:
@@ -2079,9 +2115,20 @@ func _on_door_prompt_offered(action: String, cell: Vector2i, message: String) ->
 	var is_pass := action == "pass"
 	var is_break := action == "break_door"
 	var is_unlock := action == "unlock"
+	var is_trap_choice := action == "trap_detected"
+	if _door_trap_row != null:
+		_door_trap_row.visible = is_trap_choice
 	if _door_ok_button != null:
-		_door_ok_button.visible = not is_pass and not is_break and not is_unlock
-		_door_ok_button.text = "OK"
+		_door_ok_button.visible = (
+			not is_pass and not is_break and not is_unlock and not is_trap_choice
+		)
+		if action == "trap_disarm_result" or action == "trap_sprung":
+			_door_ok_button.text = "Continue"
+			var sw_ok := _explorer_img_texture("swords.png")
+			_door_ok_button.icon = sw_ok
+		else:
+			_door_ok_button.text = "OK"
+			_door_ok_button.icon = null
 	if _door_pass_row != null:
 		_door_pass_row.visible = is_pass
 	if _door_unlock_row != null:
@@ -2090,10 +2137,19 @@ func _on_door_prompt_offered(action: String, cell: Vector2i, message: String) ->
 		_door_break_row.visible = is_break
 	if _door_prompt_icon != null:
 		match action:
-			"door_trap_survey", "trap_sprung", "trap_detected", "trap_disarm_result":
+			"trap_detected", "trap_sprung":
 				var tt := DungeonTileAssets.load_trap_icon_texture()
 				_door_prompt_icon.texture = tt
 				_door_prompt_icon.visible = tt != null
+			"trap_disarm_result":
+				if message.to_lower().contains("successfully disarm"):
+					var gch := _explorer_img_texture("green_checkmark.png")
+					_door_prompt_icon.texture = gch
+					_door_prompt_icon.visible = gch != null
+				else:
+					var ex := _explorer_img_texture("explosion.png")
+					_door_prompt_icon.texture = ex
+					_door_prompt_icon.visible = ex != null
 			"pass":
 				var dt := DungeonTileAssets.load_door_pass_modal_texture()
 				_door_prompt_icon.texture = dt
@@ -2109,6 +2165,10 @@ func _on_door_prompt_offered(action: String, cell: Vector2i, message: String) ->
 				_door_prompt_icon.texture = lt
 				_door_prompt_icon.visible = lt != null
 	_apply_door_window_chrome()
+	if is_trap_choice and _door_trap_disarm_btn != null and _door_trap_skip_btn != null:
+		ExplorerModalChrome.arrange_confirmation_footer_primary_left_cancel_right(
+			_door_trap_disarm_btn, _door_trap_skip_btn
+		)
 	_door_window.popup_centered()
 	_set_grid_hover_polish_for_modal(true)
 
@@ -2122,18 +2182,22 @@ func _apply_world_dialog_chrome() -> void:
 	var ok_v := ExplorerModalChrome.ok_variant_for_world_kind(k, t)
 	ExplorerModalChrome.apply_accept_dialog_scheme(_world_dialog, sch_w, ok_v)
 	var cbtn: Button = _world_dialog.get_cancel_button()
-	if cbtn != null:
-		var skip_pickup := k == "food_pickup" or k == "healing_potion_pickup"
-		if skip_pickup:
-			cbtn.visible = true
-			cbtn.text = "Skip"
-			var cn_tex := _explorer_img_texture("cancel.png")
-			cbtn.icon = cn_tex
-			ExplorerModalChrome.style_button(cbtn, "secondary", false)
-			ExplorerModalChrome.tighten_button_for_modal_icon_row(cbtn)
-		else:
-			cbtn.visible = false
-			cbtn.icon = null
+	var skip_pickup := k == "food_pickup" or k == "healing_potion_pickup"
+	if skip_pickup:
+		_world_dialog.cancel_button_text = "Skip"
+		cbtn.visible = true
+		var cn_tex := _explorer_img_texture("cancel.png")
+		cbtn.icon = cn_tex
+		ExplorerModalChrome.style_button(cbtn, "secondary", false)
+		ExplorerModalChrome.tighten_button_for_modal_icon_row(cbtn)
+		var ok_pick := _world_dialog.get_ok_button()
+		if ok_pick != null:
+			ExplorerModalChrome.tighten_button_for_modal_icon_row(ok_pick)
+		ExplorerModalChrome.arrange_confirmation_footer_primary_left_cancel_right(ok_pick, cbtn)
+	else:
+		_world_dialog.cancel_button_text = "Cancel"
+		cbtn.visible = false
+		cbtn.icon = null
 
 
 func _apply_door_window_chrome() -> void:
@@ -2159,6 +2223,10 @@ func _apply_door_window_chrome() -> void:
 		ExplorerModalChrome.style_button(_door_break_btn, "primary", false)
 	if _door_cancel_btn != null:
 		ExplorerModalChrome.style_button(_door_cancel_btn, "secondary", false)
+	if _door_trap_disarm_btn != null:
+		ExplorerModalChrome.style_button(_door_trap_disarm_btn, "primary", false)
+	if _door_trap_skip_btn != null:
+		ExplorerModalChrome.style_button(_door_trap_skip_btn, "secondary", false)
 	_apply_door_action_buttons_compact()
 
 
@@ -2182,9 +2250,6 @@ func _on_door_ok_pressed() -> void:
 		return
 	if a == "trap_disarm_result":
 		_net_rep.client_request_door_confirm("trap_disarm_ack", cx, cy)
-		return
-	if a == "trap_detected":
-		_net_rep.client_request_door_confirm("trap_disarm", cx, cy)
 		return
 	if a == "trap_sprung":
 		_net_rep.client_request_door_confirm("trap_sprung_ack", cx, cy)
@@ -2213,6 +2278,34 @@ func _on_door_cancel_pressed() -> void:
 	_pending_door_action = ""
 
 
+func _on_door_trap_disarm_pressed() -> void:
+	_explorer_audio().play_click()
+	if _door_window != null:
+		_door_window.hide()
+	_set_grid_hover_polish_for_modal(false)
+	if _pending_door_action != "trap_detected" or _net_rep == null:
+		_pending_door_action = ""
+		return
+	var cx := _pending_door_cell.x
+	var cy := _pending_door_cell.y
+	_pending_door_action = ""
+	_net_rep.client_request_door_confirm("trap_disarm", cx, cy)
+
+
+func _on_door_trap_skip_pressed() -> void:
+	_explorer_audio().play_click()
+	if _door_window != null:
+		_door_window.hide()
+	_set_grid_hover_polish_for_modal(false)
+	if _pending_door_action != "trap_detected" or _net_rep == null:
+		_pending_door_action = ""
+		return
+	var cx := _pending_door_cell.x
+	var cy := _pending_door_cell.y
+	_pending_door_action = ""
+	_net_rep.client_request_door_confirm("trap_skip_disarm", cx, cy)
+
+
 func _on_door_window_close_requested() -> void:
 	if _door_window != null:
 		_door_window.hide()
@@ -2238,16 +2331,16 @@ func _cell_revealed_for_interaction(cell: Vector2i) -> bool:
 func _ensure_world_interaction_dialog() -> void:
 	if _world_dialog != null:
 		return
-	_world_dialog = AcceptDialog.new()
+	_world_dialog = ConfirmationDialog.new()
 	_world_dialog.name = "WorldInteractionDialog"
 	_world_dialog.ok_button_text = "OK"
+	_world_dialog.cancel_button_text = "Cancel"
 	_world_dialog.unresizable = true
 	_world_dialog.confirmed.connect(_on_world_dialog_confirmed)
 	_world_dialog.canceled.connect(_on_world_dialog_canceled)
 	add_child(_world_dialog)
 	ExplorerModalChrome.configure_accept_dialog_body_layout(_world_dialog)
-	## Skip on food / potion pickup matches trap / feature modals (`cancel.png` + secondary).
-	_world_dialog.add_cancel_button("Skip")
+	_world_dialog.get_cancel_button().visible = false
 
 
 func _ensure_treasure_discovery_window() -> void:
