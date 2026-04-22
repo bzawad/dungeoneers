@@ -3557,6 +3557,43 @@ func _server_peer_movement_blocked(sender: int) -> bool:
 	return _server_combat_by_peer.has(sender) or _server_feature_ambush_pending.has(sender)
 
 
+## Explorer `Movement.direct_encounter_destination?` + `show_encounter_dialog_for_movement` — moving
+## orthogonally onto an `encounter|` cell shows the encounter / NPC modal **without** applying the move first.
+func _server_try_deliver_direct_encounter_before_move(
+	peer_id: int, from_cell: Vector2i, to_cell: Vector2i
+) -> bool:
+	if not GridWalk.is_orthogonal_adjacent(from_cell, to_cell):
+		return false
+	var revealed: Dictionary = _revealed_for_peer(peer_id)
+	if _fog_enabled and not DungeonFog.square_revealed(to_cell, revealed, true):
+		return false
+	var eff: String = _authority_effective_tile(to_cell)
+	if not eff.begins_with("encounter|"):
+		return false
+	var eb: Dictionary = _world_interaction_encounter_branch(peer_id, to_cell, eff)
+	var send_kind: String = str(eb.get("kind", "encounter"))
+	var pack_r := {"title": str(eb.get("title", "")), "message": str(eb.get("message", ""))}
+	if send_kind == "npc_quest_offer":
+		var qv: Variant = eb.get("quest", null)
+		if qv is Dictionary:
+			_server_pending_npc_quest[peer_id] = {
+				"cell": to_cell,
+				"quest": (qv as Dictionary).duplicate(true),
+			}
+	_deliver_world_interaction_to_peer(
+		peer_id, send_kind, to_cell, str(pack_r["title"]), str(pack_r["message"])
+	)
+	print(
+		"[Dungeoneers] direct_encounter_before_move peer_id=",
+		peer_id,
+		" cell=",
+		to_cell,
+		" kind=",
+		send_kind
+	)
+	return true
+
+
 func _server_try_adjacent_move(sender: int, target: Vector2i) -> bool:
 	if not _player_positions.has(sender):
 		return false
@@ -3579,6 +3616,11 @@ func _server_try_adjacent_move(sender: int, target: Vector2i) -> bool:
 	if _fog_enabled and not DungeonFog.square_revealed(target, revealed, true):
 		print("[Dungeoneers] move rejected: fog peer_id=", sender, " from=", cur, " to=", target)
 		return false
+	if _cell_occupied_by_other(sender, target):
+		print("[Dungeoneers] move rejected: cell occupied peer_id=", sender, " target=", target)
+		return false
+	if _server_try_deliver_direct_encounter_before_move(sender, cur, target):
+		return true
 	var move_tile: String = _authority_effective_tile(target)
 	if not GridWalk.is_walkable_for_movement_at(
 		move_tile, target, _unlocked_doors, _authority_guards_hostile
@@ -3591,9 +3633,6 @@ func _server_try_adjacent_move(sender: int, target: Vector2i) -> bool:
 			" at=",
 			target
 		)
-		return false
-	if _cell_occupied_by_other(sender, target):
-		print("[Dungeoneers] move rejected: cell occupied peer_id=", sender, " target=", target)
 		return false
 	_apply_authorized_move(sender, target, true)
 	return true
@@ -5085,6 +5124,14 @@ func _server_path_move_tick(sender: int, serial: int) -> void:
 		print("[Dungeoneers] path move aborted: fog peer_id=", sender)
 		_server_cancel_pending_path_move(sender)
 		return
+	if _cell_occupied_by_other(sender, nxt):
+		print("[Dungeoneers] path move aborted: occupied peer_id=", sender)
+		_server_cancel_pending_path_move(sender)
+		return
+	var step_was_last: bool = arr.size() == 1
+	if step_was_last and _server_try_deliver_direct_encounter_before_move(sender, cur, nxt):
+		_server_cancel_pending_path_move(sender)
+		return
 	var move_tile: String = _authority_effective_tile(nxt)
 	if not GridWalk.is_walkable_for_movement_at(
 		move_tile, nxt, _unlocked_doors, _authority_guards_hostile
@@ -5092,11 +5139,6 @@ func _server_path_move_tick(sender: int, serial: int) -> void:
 		print("[Dungeoneers] path move aborted: not walkable peer_id=", sender)
 		_server_cancel_pending_path_move(sender)
 		return
-	if _cell_occupied_by_other(sender, nxt):
-		print("[Dungeoneers] path move aborted: occupied peer_id=", sender)
-		_server_cancel_pending_path_move(sender)
-		return
-	var step_was_last: bool = arr.size() == 1
 	arr.remove_at(0)
 	_apply_authorized_move(sender, nxt, step_was_last)
 	if _server_peer_movement_blocked(sender):
@@ -5126,6 +5168,17 @@ func _server_begin_authorized_path_walk(
 	var rest: Array[Vector2i] = all_steps.duplicate()
 	var first: Vector2i = rest.pop_front()
 	var single_step_path: bool = all_steps.size() == 1
+	if single_step_path:
+		var cur_path: Vector2i = _player_positions[sender]
+		if not _cell_occupied_by_other(sender, first):
+			if _server_try_deliver_direct_encounter_before_move(sender, cur_path, first):
+				print(
+					"[Dungeoneers] path move intercepted at encounter peer_id=",
+					sender,
+					" cell=",
+					first
+				)
+				return
 	_apply_authorized_move(sender, first, single_step_path)
 	if _server_peer_movement_blocked(sender):
 		_server_cancel_pending_path_move(sender)

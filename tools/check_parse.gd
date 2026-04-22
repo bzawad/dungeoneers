@@ -167,6 +167,30 @@ func _init() -> void:
 		push_error("check_parse: city building should use floor texture")
 		quit(1)
 		return
+	if DungeonTileAssets.bundled_pngs_present():
+		var _ts_road_parity := DungeonTileAssets.build_tile_set_from_bundled_pngs("", "", "", "")
+		if DungeonTileAssets.SRC_ROAD >= 0:
+			var street_cell := Vector2i(0, 0)
+			var id_road := DungeonTileAssets.terrain_source_id(
+				"road", "city", street_cell, city_rooms
+			)
+			var id_sf := DungeonTileAssets.terrain_source_id(
+				"special_feature|x|Altar", "city", street_cell, city_rooms
+			)
+			if id_road != id_sf or id_road != DungeonTileAssets.SRC_ROAD:
+				push_error(
+					"check_parse: city street road vs special_feature terrain source mismatch"
+				)
+				quit(1)
+				return
+			var interior_cell := Vector2i(1, 1)
+			var id_inside := DungeonTileAssets.terrain_source_id(
+				"special_feature|x|Altar", "city", interior_cell, city_rooms
+			)
+			if id_inside != DungeonTileAssets.SRC_FLOOR:
+				push_error("check_parse: city building interior should use floor tile source")
+				quit(1)
+				return
 	const WorldLabelsMsg := preload("res://dungeon/world/world_labels_messages.gd")
 	var pr1: Dictionary = WorldLabelsMsg.room_label_payload("room_label|R1", "", "")
 	if not str(pr1.get("message", "")).contains("The entrance chamber"):

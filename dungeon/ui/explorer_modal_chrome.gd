@@ -96,8 +96,9 @@ static func apply_accept_dialog_scheme(
 		style_button(ok, ok_variant, false)
 
 
-## `ConfirmationDialog` follows host OS button order (often Cancel left, OK right). Explorer modals use
-## **primary left, Skip / Cancel right** (same as custom `HBoxContainer` footers in `dungeon_session`).
+## Reorder **custom** modal `HBoxContainer` rows (door trap, etc.). Do **not** use on engine `AcceptDialog`
+## `buttons_hbox`: its spacer–button pairs break if you `move_child` only the `Button` nodes.
+## Explorer modals use **primary left, Skip / Cancel right** (same as those custom footers in `dungeon_session`).
 static func arrange_confirmation_footer_primary_left_cancel_right(
 	ok_btn: Button, cancel_btn: Button
 ) -> void:
@@ -158,6 +159,28 @@ static func style_body_label(lb: Label, scheme: String) -> void:
 	if lb == null:
 		return
 	lb.add_theme_color_override(&"font_color", content_color_for_scheme(scheme))
+
+
+## Explorer-toned track + scheme-accent fill (e.g. Audio settings).
+static func style_hslider(sl: Slider, scheme: String) -> void:
+	if sl == null:
+		return
+	var sch := normalize_scheme(scheme)
+	var accent := border_color_for_scheme(sch)
+	var track := StyleBoxFlat.new()
+	track.bg_color = Color8(0x1F, 0x29, 0x37)
+	track.set_corner_radius_all(4)
+	track.set_content_margin_all(2)
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = Color(accent.r, accent.g, accent.b, 0.88)
+	fill.set_corner_radius_all(3)
+	fill.set_content_margin_all(0)
+	var fill_hi := fill.duplicate() as StyleBoxFlat
+	fill_hi.bg_color = fill_hi.bg_color.lightened(0.12)
+	sl.add_theme_stylebox_override(&"slider", track)
+	sl.add_theme_stylebox_override(&"grabber_area", fill)
+	sl.add_theme_stylebox_override(&"grabber_area_highlight", fill_hi)
+	sl.custom_minimum_size.y = maxf(sl.custom_minimum_size.y, 22.0)
 
 
 static func style_button(btn: Button, variant: String, disabled: bool) -> void:
@@ -261,6 +284,8 @@ static func wrap_item_list_in_plated_panel(il: ItemList) -> PanelContainer:
 
 static func scheme_for_encounter_resolution_title(title: String) -> String:
 	match title:
+		"Level Up!":
+			return "yellow"
 		"Treasure found", "Victory", "Quest accepted":
 			return "green"
 		"Rumor":
@@ -279,6 +304,8 @@ static func scheme_for_encounter_resolution_title(title: String) -> String:
 
 static func ok_variant_for_encounter_resolution_title(title: String) -> String:
 	match title:
+		"Level Up!":
+			return "success"
 		"Treasure found", "Victory", "Quest accepted":
 			return "success"
 		"Rumor":

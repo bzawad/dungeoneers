@@ -647,7 +647,7 @@ func _display_tile_for_cell(cell: Vector2i) -> String:
 func _paint_cell(cell: Vector2i) -> void:
 	var s: String = _display_tile_for_cell(cell)
 	if _use_bundled_pngs:
-		var tid := DungeonTileAssets.terrain_source_id(s, _generation_type)
+		var tid := DungeonTileAssets.terrain_source_id(s, _generation_type, cell, _rooms)
 		if tid < 0:
 			return
 		var ac := DungeonTileAssets.terrain_source_atlas(cell, s, _generation_type, _rooms)
@@ -668,7 +668,7 @@ func _paint_cell_to_layer(layer: TileMapLayer, cell: Vector2i, s: String) -> voi
 	if layer == null:
 		return
 	if _use_bundled_pngs:
-		var tid2 := DungeonTileAssets.terrain_source_id(s, _generation_type)
+		var tid2 := DungeonTileAssets.terrain_source_id(s, _generation_type, cell, _rooms)
 		if tid2 < 0:
 			return
 		var ac2 := DungeonTileAssets.terrain_source_atlas(cell, s, _generation_type, _rooms)

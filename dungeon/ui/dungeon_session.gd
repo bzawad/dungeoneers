@@ -59,7 +59,9 @@ var _label_location_continue_btn: Button = null
 var _pending_door_action: String = ""
 var _pending_door_cell: Vector2i = Vector2i.ZERO
 var _trap_defused: Dictionary = {}
-var _world_dialog: ConfirmationDialog = null
+var _world_dialog: AcceptDialog = null
+## Right-side Skip for consumable pickups (`add_button(..., true, "pickup_skip")`); not used for quest/stair flows.
+var _world_pickup_skip_button: Button = null
 var _pending_world_kind: String = ""
 var _pending_world_cell: Vector2i = Vector2i.ZERO
 var _treasure_discovery_window: Window = null
@@ -142,7 +144,6 @@ var _encounter_res_ok_btn: Button = null
 var _encounter_res_last_title: String = ""
 ## When server sends `treasure` while trap resolution is still open, show after OK (Explorer ordering).
 var _pending_treasure_pickup_after_trap: Dictionary = {}
-var _level_up_dialog: AcceptDialog = null
 var _combat_window: Window = null
 var _combat_title_label: Label = null
 var _combat_surprise_label: Label = null
@@ -201,8 +202,12 @@ var _stats_layer: CanvasLayer = null
 var _stats_hud_root: Control = null
 var _stats_sidebar: ExplorerStatsSidebar = null
 var _audio_settings_window: Window = null
+var _audio_hint_label: Label = null
+var _audio_sfx_row_label: Label = null
+var _audio_music_row_label: Label = null
 var _audio_sfx_slider: HSlider = null
 var _audio_music_slider: HSlider = null
+var _audio_close_btn: Button = null
 var _hud_guards_hostile: bool = false
 var _last_gold: int = 0
 var _last_xp: int = 0
@@ -455,8 +460,12 @@ func reload_from_authority(grid: Dictionary, seed_for_log: int, welcome: Diction
 	if _achievements_list_window != null and _achievements_list_window.visible:
 		_achievements_list_window.hide()
 		_set_grid_hover_polish_for_modal(false)
-	if _level_up_dialog != null and _level_up_dialog.visible:
-		_level_up_dialog.hide()
+	if (
+		_encounter_res_window != null
+		and _encounter_res_window.visible
+		and _encounter_res_last_title == "Level Up!"
+	):
+		_encounter_res_window.hide()
 		_set_grid_hover_polish_for_modal(false)
 	if _map_link_window != null and _map_link_window.visible:
 		_map_link_window.hide()
@@ -1017,6 +1026,8 @@ func _encounter_res_set_header_icon_for_title(title: String) -> void:
 			basename = "special_item.png"
 		"Achievement":
 			basename = "victory.png"
+		"Level Up!":
+			basename = "xp.png"
 		"Treasure found":
 			basename = "gold.png"
 		"Trap triggered", "Feature trap":
@@ -1036,7 +1047,41 @@ func _encounter_res_set_header_icon_for_title(title: String) -> void:
 	_encounter_res_header_icon.visible = tex != null
 
 
-func _show_encounter_resolution_modal(title: String, message: String) -> void:
+func _defer_grab_focus(ctrl: Control) -> void:
+	if ctrl == null:
+		return
+	var n := ctrl as Node
+	if not n.is_inside_tree():
+		return
+	ctrl.call_deferred("grab_focus")
+
+
+func _defer_grab_ok_from_dialog(d: AcceptDialog) -> void:
+	if d == null:
+		return
+	_defer_grab_focus(d.get_ok_button() as Control)
+
+
+func _defer_grab_primary_after_door_popup(action: String) -> void:
+	var is_pass := action == "pass"
+	var is_break := action == "break_door"
+	var is_unlock := action == "unlock"
+	var is_trap_choice := action == "trap_detected"
+	if is_pass:
+		_defer_grab_focus(_door_enter_btn)
+	elif is_unlock:
+		_defer_grab_focus(_door_pick_lock_btn)
+	elif is_break:
+		_defer_grab_focus(_door_break_btn)
+	elif is_trap_choice:
+		_defer_grab_focus(_door_trap_disarm_btn)
+	else:
+		_defer_grab_focus(_door_ok_button)
+
+
+func _show_encounter_resolution_modal(
+	title: String, message: String, ok_button_text: String = "OK"
+) -> void:
 	_ensure_encounter_resolution_dialog()
 	_encounter_res_last_title = title
 	_encounter_res_window.title = title
@@ -1044,6 +1089,8 @@ func _show_encounter_resolution_modal(title: String, message: String) -> void:
 		_encounter_res_title_label.text = title
 	if _encounter_res_body_label != null:
 		_encounter_res_body_label.text = message
+	if _encounter_res_ok_btn != null:
+		_encounter_res_ok_btn.text = ok_button_text
 	_encounter_res_set_header_icon_for_title(title)
 	var sch_show := ExplorerModalChrome.scheme_for_encounter_resolution_title(title)
 	var okv_show := ExplorerModalChrome.ok_variant_for_encounter_resolution_title(title)
@@ -1051,47 +1098,18 @@ func _show_encounter_resolution_modal(title: String, message: String) -> void:
 	var desired_sz := Vector2i(520, 400)
 	_encounter_res_window.size = _clamp_encounter_res_window_size(desired_sz)
 	_encounter_res_window.popup_centered()
-	if _encounter_res_ok_btn != null:
-		_encounter_res_ok_btn.grab_focus()
+	_defer_grab_focus(_encounter_res_ok_btn)
 	_set_grid_hover_polish_for_modal(true)
-
-
-func _ensure_level_up_dialog() -> void:
-	if _level_up_dialog != null:
-		return
-	_level_up_dialog = AcceptDialog.new()
-	_level_up_dialog.name = "LevelUpDialog"
-	_level_up_dialog.title = "Level up"
-	_level_up_dialog.ok_button_text = "Continue"
-	_level_up_dialog.unresizable = true
-	_level_up_dialog.confirmed.connect(_on_level_up_dialog_confirmed)
-	_level_up_dialog.canceled.connect(_on_level_up_dialog_canceled)
-	add_child(_level_up_dialog)
 
 
 func _on_level_up_dialog_offered(
 	_new_level: int, primary_message: String, talent_message: String
 ) -> void:
-	_ensure_level_up_dialog()
-	_level_up_dialog.title = "Level %d" % int(_new_level)
-	_level_up_dialog.dialog_text = primary_message + "\n\n" + talent_message
-	ExplorerModalChrome.apply_accept_dialog_scheme(_level_up_dialog, "yellow", "success")
+	## Explorer `map_template.ex` level-up `DialogComponent`: title "Level Up!", `xp.png`, yellow, Continue (success).
+	_show_encounter_resolution_modal(
+		"Level Up!", primary_message + "\n\n" + talent_message, "Continue"
+	)
 	_explorer_audio().play_level_up_hit()
-	_level_up_dialog.popup_centered()
-	_set_grid_hover_polish_for_modal(true)
-
-
-func _on_level_up_dialog_confirmed() -> void:
-	if _level_up_dialog != null:
-		_level_up_dialog.hide()
-	_set_grid_hover_polish_for_modal(false)
-	_explorer_audio().play_click()
-	if _net_rep != null:
-		_net_rep.client_request_level_up_dismiss()
-
-
-func _on_level_up_dialog_canceled() -> void:
-	_on_level_up_dialog_confirmed()
 
 
 func _hide_encounter_choice_window() -> void:
@@ -1101,9 +1119,8 @@ func _hide_encounter_choice_window() -> void:
 
 
 func _on_encounter_window_close_requested() -> void:
-	_hide_encounter_choice_window()
-	_pending_encounter_cell = Vector2i.ZERO
-	_last_encounter_fight_cell = Vector2i.ZERO
+	## Escape / window close: same as Evade (Explorer secondary action).
+	_on_encounter_evade_pressed()
 
 
 func _on_encounter_fight_pressed() -> void:
@@ -1174,6 +1191,10 @@ func _dismiss_encounter_resolution_modal() -> void:
 		_explorer_audio().play_click()
 	if dlg_title == "Achievement":
 		_explorer_audio().play_click()
+	if dlg_title == "Level Up!":
+		_explorer_audio().play_click()
+		if _net_rep != null:
+			_net_rep.client_request_level_up_dismiss()
 	if dlg_title == "Treasure found":
 		_explorer_audio().play_coins()
 	if dlg_title == "Evade failed" and _net_rep != null:
@@ -1312,6 +1333,7 @@ func _show_victory_after_combat() -> void:
 		ExplorerModalChrome.style_title_label(row_v.get_child(1) as Label, "green")
 	ExplorerModalChrome.style_body_label(_victory_body_label, "green")
 	_victory_window.popup_centered()
+	_defer_grab_focus(_victory_action_btn)
 	_set_grid_hover_polish_for_modal(true)
 
 
@@ -1447,6 +1469,7 @@ func _show_death_dialog(trap_flavor: String) -> void:
 	_explorer_audio().play_death_sting()
 	_explorer_audio().start_death_music()
 	_death_window.popup_centered()
+	_defer_grab_focus(_death_continue_btn)
 	_set_grid_hover_polish_for_modal(true)
 
 
@@ -1534,6 +1557,7 @@ func _show_revival_dialog() -> void:
 	ExplorerModalChrome.style_window_panel(_revival_window, "yellow")
 	ExplorerModalChrome.style_body_label(_revival_body_label, "yellow")
 	_revival_window.popup_centered()
+	_defer_grab_focus(_revival_ok_btn)
 	_set_grid_hover_polish_for_modal(true)
 
 
@@ -1984,6 +2008,8 @@ func _on_combat_state_changed(snapshot: Dictionary) -> void:
 		_combat_window.title = "Combat!"
 		_apply_combat_window_chrome()
 		_combat_window.popup_centered()
+		if show_btns and _combat_attack_btn != null and not _combat_attack_btn.disabled:
+			_defer_grab_focus(_combat_attack_btn)
 	_set_grid_hover_polish_for_modal(true)
 	_scroll_combat_log_to_bottom()
 
@@ -2027,6 +2053,7 @@ func _on_secret_doors_delta(cells: PackedVector2Array, view: Node2D) -> void:
 			if _secret_door_notice != null and not _secret_door_notice.visible:
 				_secret_door_notice.dialog_text = "You spot a hidden door in the wall!"
 				_secret_door_notice.popup_centered()
+				_defer_grab_ok_from_dialog(_secret_door_notice)
 				_set_grid_hover_polish_for_modal(true)
 			break
 
@@ -2170,6 +2197,7 @@ func _on_door_prompt_offered(action: String, cell: Vector2i, message: String) ->
 			_door_trap_disarm_btn, _door_trap_skip_btn
 		)
 	_door_window.popup_centered()
+	_defer_grab_primary_after_door_popup(action)
 	_set_grid_hover_polish_for_modal(true)
 
 
@@ -2181,23 +2209,31 @@ func _apply_world_dialog_chrome() -> void:
 	var sch_w := ExplorerModalChrome.scheme_for_world_kind_title(k, t)
 	var ok_v := ExplorerModalChrome.ok_variant_for_world_kind(k, t)
 	ExplorerModalChrome.apply_accept_dialog_scheme(_world_dialog, sch_w, ok_v)
-	var cbtn: Button = _world_dialog.get_cancel_button()
-	var skip_pickup := k == "food_pickup" or k == "healing_potion_pickup"
-	if skip_pickup:
-		_world_dialog.cancel_button_text = "Skip"
-		cbtn.visible = true
-		var cn_tex := _explorer_img_texture("cancel.png")
-		cbtn.icon = cn_tex
-		ExplorerModalChrome.style_button(cbtn, "secondary", false)
-		ExplorerModalChrome.tighten_button_for_modal_icon_row(cbtn)
-		var ok_pick := _world_dialog.get_ok_button()
-		if ok_pick != null:
-			ExplorerModalChrome.tighten_button_for_modal_icon_row(ok_pick)
-		ExplorerModalChrome.arrange_confirmation_footer_primary_left_cancel_right(ok_pick, cbtn)
-	else:
-		_world_dialog.cancel_button_text = "Cancel"
-		cbtn.visible = false
-		cbtn.icon = null
+	var skip_pickup := k == "food_pickup" or k == "healing_potion_pickup" or k == "torch_pickup"
+	var ok_pick := _world_dialog.get_ok_button()
+	var btn_row := ok_pick.get_parent() if ok_pick != null else null
+	if btn_row is HBoxContainer:
+		(btn_row as HBoxContainer).add_theme_constant_override(
+			&"separation", 16 if skip_pickup else 4
+		)
+	var body_lb: Label = _world_dialog.get_label()
+	if body_lb != null:
+		body_lb.horizontal_alignment = (
+			HORIZONTAL_ALIGNMENT_CENTER if skip_pickup else HORIZONTAL_ALIGNMENT_LEFT
+		)
+	if _world_pickup_skip_button != null:
+		if skip_pickup:
+			_world_pickup_skip_button.visible = true
+			_world_pickup_skip_button.text = "Skip"
+			var cn_tex := _explorer_img_texture("cancel.png")
+			_world_pickup_skip_button.icon = cn_tex
+			ExplorerModalChrome.style_button(_world_pickup_skip_button, "secondary", false)
+			ExplorerModalChrome.tighten_button_for_modal_icon_row(_world_pickup_skip_button)
+			if ok_pick != null:
+				ExplorerModalChrome.tighten_button_for_modal_icon_row(ok_pick)
+		else:
+			_world_pickup_skip_button.visible = false
+			_world_pickup_skip_button.icon = null
 
 
 func _apply_door_window_chrome() -> void:
@@ -2331,16 +2367,17 @@ func _cell_revealed_for_interaction(cell: Vector2i) -> bool:
 func _ensure_world_interaction_dialog() -> void:
 	if _world_dialog != null:
 		return
-	_world_dialog = ConfirmationDialog.new()
+	_world_dialog = AcceptDialog.new()
 	_world_dialog.name = "WorldInteractionDialog"
 	_world_dialog.ok_button_text = "OK"
-	_world_dialog.cancel_button_text = "Cancel"
 	_world_dialog.unresizable = true
 	_world_dialog.confirmed.connect(_on_world_dialog_confirmed)
 	_world_dialog.canceled.connect(_on_world_dialog_canceled)
+	_world_dialog.custom_action.connect(_on_world_dialog_custom_action)
 	add_child(_world_dialog)
 	ExplorerModalChrome.configure_accept_dialog_body_layout(_world_dialog)
-	_world_dialog.get_cancel_button().visible = false
+	_world_pickup_skip_button = _world_dialog.add_button("Skip", true, "pickup_skip")
+	_world_pickup_skip_button.visible = false
 
 
 func _ensure_treasure_discovery_window() -> void:
@@ -2413,6 +2450,7 @@ func _present_treasure_pickup_dialog(cell: Vector2i, title: String, message: Str
 	_apply_treasure_discovery_window_chrome()
 	_explorer_audio().play_chest_open()
 	_treasure_discovery_window.popup_centered()
+	_defer_grab_focus(_treasure_discovery_collect_btn)
 	_set_grid_hover_polish_for_modal(true)
 
 
@@ -2450,11 +2488,8 @@ func _on_treasure_discovery_collect_pressed() -> void:
 
 
 func _on_treasure_discovery_window_close_requested() -> void:
-	_pending_world_kind = ""
-	_pending_world_cell = Vector2i.ZERO
-	if _treasure_discovery_window != null:
-		_treasure_discovery_window.hide()
-	_set_grid_hover_polish_for_modal(false)
+	## Escape: same as Collect (only affirmative action; keeps server/client in sync).
+	_on_treasure_discovery_collect_pressed()
 
 
 func _dispatch_pending_world_pickup_action(kind: String, cell: Vector2i) -> void:
@@ -3073,18 +3108,23 @@ func _apply_trapped_treasure_window_chrome() -> void:
 		ExplorerModalChrome.tighten_button_for_modal_icon_row(_treasure_trap_leave_btn)
 
 
-func _on_trapped_treasure_window_close_requested() -> void:
+func _hide_trapped_treasure_window_shell() -> void:
 	if _treasure_trap_window != null:
 		_treasure_trap_window.hide()
 	_set_grid_hover_polish_for_modal(false)
 	_pending_trapped_treasure_cell = Vector2i.ZERO
 
 
-func _on_trapped_treasure_leave_pressed() -> void:
+func _on_trapped_treasure_window_close_requested() -> void:
+	## Escape / window close: same as Skip (server must clear trap flow).
 	_explorer_audio().play_click()
-	var c := _pending_trapped_treasure_cell
-	if _net_rep != null and c != Vector2i.ZERO:
-		_net_rep.client_request_trapped_treasure_skip_disarm(c.x, c.y)
+	var c_esc := _pending_trapped_treasure_cell
+	if _net_rep != null and c_esc != Vector2i.ZERO:
+		_net_rep.client_request_trapped_treasure_skip_disarm(c_esc.x, c_esc.y)
+	_hide_trapped_treasure_window_shell()
+
+
+func _on_trapped_treasure_leave_pressed() -> void:
 	_on_trapped_treasure_window_close_requested()
 
 
@@ -3093,7 +3133,7 @@ func _on_trapped_treasure_disarm_pressed() -> void:
 	var c2 := _pending_trapped_treasure_cell
 	if _net_rep != null and c2 != Vector2i.ZERO:
 		_net_rep.client_request_trapped_treasure_disarm(c2.x, c2.y)
-	_on_trapped_treasure_window_close_requested()
+	_hide_trapped_treasure_window_shell()
 
 
 func _ensure_room_trap_window() -> void:
@@ -3166,18 +3206,23 @@ func _apply_room_trap_window_chrome() -> void:
 		ExplorerModalChrome.tighten_button_for_modal_icon_row(_room_trap_leave_btn)
 
 
-func _on_room_trap_window_close_requested() -> void:
+func _hide_room_trap_window_shell() -> void:
 	if _room_trap_window != null:
 		_room_trap_window.hide()
 	_set_grid_hover_polish_for_modal(false)
 	_pending_room_trap_cell = Vector2i.ZERO
 
 
-func _on_room_trap_leave_pressed() -> void:
+func _on_room_trap_window_close_requested() -> void:
+	## Escape / window close: same as Skip.
 	_explorer_audio().play_click()
-	var c := _pending_room_trap_cell
-	if _net_rep != null and c != Vector2i.ZERO:
-		_net_rep.client_request_room_trap_skip_disarm(c.x, c.y)
+	var c_esc_rt := _pending_room_trap_cell
+	if _net_rep != null and c_esc_rt != Vector2i.ZERO:
+		_net_rep.client_request_room_trap_skip_disarm(c_esc_rt.x, c_esc_rt.y)
+	_hide_room_trap_window_shell()
+
+
+func _on_room_trap_leave_pressed() -> void:
 	_on_room_trap_window_close_requested()
 
 
@@ -3186,7 +3231,7 @@ func _on_room_trap_disarm_pressed() -> void:
 	var c2 := _pending_room_trap_cell
 	if _net_rep != null and c2 != Vector2i.ZERO:
 		_net_rep.client_request_room_trap_disarm(c2.x, c2.y)
-	_on_room_trap_window_close_requested()
+	_hide_room_trap_window_shell()
 
 
 func _on_player_quests_updated(rows: PackedStringArray) -> void:
@@ -3350,6 +3395,7 @@ func _on_world_interaction_offered(
 			_encounter_message_label.text = message
 		_apply_encounter_choice_window_chrome()
 		_encounter_window.popup_centered()
+		_defer_grab_focus(_encounter_fight_btn)
 		_set_grid_hover_polish_for_modal(true)
 		return
 	if kind == "npc_quest_offer":
@@ -3359,6 +3405,7 @@ func _on_world_interaction_offered(
 		if _npc_quest_offer_label != null:
 			_npc_quest_offer_label.text = message
 		_npc_quest_offer_window.popup_centered()
+		_defer_grab_focus(_npc_quest_accept_btn)
 		_set_grid_hover_polish_for_modal(true)
 		return
 	if (
@@ -3378,6 +3425,7 @@ func _on_world_interaction_offered(
 			_label_location_body.text = message
 		_apply_label_location_window_chrome()
 		_label_location_window.popup_centered()
+		_defer_grab_focus(_label_location_continue_btn)
 		_set_grid_hover_polish_for_modal(true)
 		return
 	if kind == "encounter_npc":
@@ -3389,6 +3437,7 @@ func _on_world_interaction_offered(
 		_world_dialog.ok_button_text = "Leave"
 		_apply_world_dialog_chrome()
 		_world_dialog.popup_centered()
+		_defer_grab_ok_from_dialog(_world_dialog)
 		_set_grid_hover_polish_for_modal(true)
 		return
 	if kind == "special_feature":
@@ -3401,6 +3450,7 @@ func _on_world_interaction_offered(
 			_special_feature_message_label.text = message
 		_apply_special_feature_window_chrome()
 		_special_feature_window.popup_centered()
+		_defer_grab_focus(_special_feature_investigate_btn)
 		_set_grid_hover_polish_for_modal(true)
 		return
 	if kind == "trapped_treasure_detected":
@@ -3410,6 +3460,7 @@ func _on_world_interaction_offered(
 		if _treasure_trap_message_label != null:
 			_treasure_trap_message_label.text = message
 		_treasure_trap_window.popup_centered()
+		_defer_grab_focus(_treasure_trap_disarm_btn)
 		_set_grid_hover_polish_for_modal(true)
 		return
 	if kind == "trapped_treasure_undetected":
@@ -3421,6 +3472,7 @@ func _on_world_interaction_offered(
 		_world_dialog.ok_button_text = "Continue"
 		_apply_world_dialog_chrome()
 		_world_dialog.popup_centered()
+		_defer_grab_ok_from_dialog(_world_dialog)
 		_set_grid_hover_polish_for_modal(true)
 		return
 	if kind == "room_trap_detected":
@@ -3430,6 +3482,7 @@ func _on_world_interaction_offered(
 		if _room_trap_message_label != null:
 			_room_trap_message_label.text = message
 		_room_trap_window.popup_centered()
+		_defer_grab_focus(_room_trap_disarm_btn)
 		_set_grid_hover_polish_for_modal(true)
 		return
 	if kind == "room_trap_undetected":
@@ -3441,6 +3494,7 @@ func _on_world_interaction_offered(
 		_world_dialog.ok_button_text = "Continue"
 		_apply_world_dialog_chrome()
 		_world_dialog.popup_centered()
+		_defer_grab_ok_from_dialog(_world_dialog)
 		_set_grid_hover_polish_for_modal(true)
 		return
 	if kind == "treasure":
@@ -3482,6 +3536,7 @@ func _on_world_interaction_offered(
 			_waypoint_cancel_btn.icon = _explorer_img_texture("cancel.png")
 		_apply_waypoint_window_chrome()
 		_waypoint_window.popup_centered()
+		_defer_grab_focus(_waypoint_travel_btn)
 		_set_grid_hover_polish_for_modal(true)
 		return
 	if kind == "map_link":
@@ -3506,6 +3561,7 @@ func _on_world_interaction_offered(
 			_map_link_cancel_btn.icon = _explorer_img_texture("cancel.png")
 		_apply_map_link_window_chrome()
 		_map_link_window.popup_centered()
+		_defer_grab_focus(_map_link_enter_btn)
 		_set_grid_hover_polish_for_modal(true)
 		return
 	if kind == "stair":
@@ -3539,6 +3595,7 @@ func _on_world_interaction_offered(
 			_stair_cancel_btn.icon = _explorer_img_texture("cancel.png")
 		_apply_stair_window_chrome()
 		_stair_window.popup_centered()
+		_defer_grab_focus(_stair_go_btn)
 		_set_grid_hover_polish_for_modal(true)
 		return
 	_pending_world_kind = kind
@@ -3560,18 +3617,25 @@ func _on_world_interaction_offered(
 		_explorer_audio().play_quest_completion_fanfare()
 	_apply_world_dialog_chrome()
 	_world_dialog.popup_centered()
+	_defer_grab_ok_from_dialog(_world_dialog)
 	_set_grid_hover_polish_for_modal(true)
 
 
 func _on_world_dialog_canceled() -> void:
 	var k_skip := _pending_world_kind
-	if k_skip == "food_pickup" or k_skip == "healing_potion_pickup":
+	if k_skip == "food_pickup" or k_skip == "healing_potion_pickup" or k_skip == "torch_pickup":
 		_explorer_audio().play_click()
 	_pending_world_kind = ""
 	_pending_world_cell = Vector2i.ZERO
 	if _world_dialog != null:
 		_world_dialog.hide()
 	_set_grid_hover_polish_for_modal(false)
+
+
+func _on_world_dialog_custom_action(action: StringName) -> void:
+	if action != &"pickup_skip":
+		return
+	_on_world_dialog_canceled()
 
 
 func _on_world_dialog_confirmed() -> void:
@@ -3644,12 +3708,14 @@ func _ensure_audio_settings_window() -> void:
 	vb_a.add_theme_constant_override("separation", 12)
 	margin_a.add_child(vb_a)
 	var hint := Label.new()
+	_audio_hint_label = hint
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.text = "Volumes apply to this client only (SFX and Music buses). Settings are saved automatically."
 	vb_a.add_child(hint)
 	var row_s := HBoxContainer.new()
 	row_s.add_theme_constant_override("separation", 10)
 	var ls := Label.new()
+	_audio_sfx_row_label = ls
 	ls.text = "SFX"
 	ls.custom_minimum_size = Vector2(56, 0)
 	row_s.add_child(ls)
@@ -3664,6 +3730,7 @@ func _ensure_audio_settings_window() -> void:
 	var row_m := HBoxContainer.new()
 	row_m.add_theme_constant_override("separation", 10)
 	var lm := Label.new()
+	_audio_music_row_label = lm
 	lm.text = "Music"
 	lm.custom_minimum_size = Vector2(56, 0)
 	row_m.add_child(lm)
@@ -3681,7 +3748,27 @@ func _ensure_audio_settings_window() -> void:
 	close_audio.text = "Close"
 	close_audio.pressed.connect(_hide_audio_settings_window)
 	close_row.add_child(close_audio)
+	_audio_close_btn = close_audio
 	vb_a.add_child(close_row)
+	_apply_audio_settings_window_chrome()
+
+
+func _apply_audio_settings_window_chrome() -> void:
+	if _audio_settings_window == null:
+		return
+	ExplorerModalChrome.style_window_panel(_audio_settings_window, "gray")
+	if _audio_hint_label != null:
+		ExplorerModalChrome.style_body_label(_audio_hint_label, "gray")
+	if _audio_sfx_row_label != null:
+		ExplorerModalChrome.style_body_label(_audio_sfx_row_label, "gray")
+	if _audio_music_row_label != null:
+		ExplorerModalChrome.style_body_label(_audio_music_row_label, "gray")
+	if _audio_sfx_slider != null:
+		ExplorerModalChrome.style_hslider(_audio_sfx_slider, "gray")
+	if _audio_music_slider != null:
+		ExplorerModalChrome.style_hslider(_audio_music_slider, "gray")
+	if _audio_close_btn != null:
+		ExplorerModalChrome.style_button(_audio_close_btn, "secondary", false)
 
 
 func _sync_audio_sliders_from_saved() -> void:
@@ -3698,6 +3785,7 @@ func _on_audio_settings_button_pressed() -> void:
 	_ensure_audio_settings_window()
 	_sync_audio_sliders_from_saved()
 	_audio_settings_window.popup_centered()
+	_defer_grab_focus(_audio_close_btn)
 	_set_grid_hover_polish_for_modal(true)
 
 
@@ -3868,6 +3956,7 @@ func _on_rumors_list_button_pressed() -> void:
 	_ensure_rumors_list_window()
 	_refresh_rumors_list_items()
 	_rumors_list_window.popup_centered()
+	_defer_grab_focus(_rumors_view_btn)
 	_set_grid_hover_polish_for_modal(true)
 
 
@@ -3997,6 +4086,7 @@ func _on_special_items_list_button_pressed() -> void:
 	_ensure_special_items_list_window()
 	_refresh_special_items_list_items()
 	_special_items_list_window.popup_centered()
+	_defer_grab_focus(_special_items_view_btn)
 	_set_grid_hover_polish_for_modal(true)
 
 
@@ -4145,6 +4235,7 @@ func _on_achievements_list_button_pressed() -> void:
 	_ensure_achievements_list_window()
 	_refresh_achievements_list_items()
 	_achievements_list_window.popup_centered()
+	_defer_grab_focus(_achievements_view_btn)
 	_set_grid_hover_polish_for_modal(true)
 
 
@@ -4425,6 +4516,22 @@ func _modal_blocks_grid_input() -> bool:
 	if _waypoint_window != null and _waypoint_window.visible:
 		return true
 	if _stair_window != null and _stair_window.visible:
+		return true
+	if _treasure_trap_window != null and _treasure_trap_window.visible:
+		return true
+	if _room_trap_window != null and _room_trap_window.visible:
+		return true
+	if _npc_quest_offer_window != null and _npc_quest_offer_window.visible:
+		return true
+	if _victory_window != null and _victory_window.visible:
+		return true
+	if _death_window != null and _death_window.visible:
+		return true
+	if _revival_window != null and _revival_window.visible:
+		return true
+	if _audio_settings_window != null and _audio_settings_window.visible:
+		return true
+	if _achievements_list_window != null and _achievements_list_window.visible:
 		return true
 	return false
 

@@ -288,7 +288,13 @@ static func terrain_source_atlas(
 	return atlas_xy_from_hash(h)
 
 
-static func terrain_source_id(tile_str: String, generation_type: String = "dungeon") -> int:
+## Explorer `Renderer.get_tile_background_style/3` — which PNG atlas (floor vs road vs wall).
+static func terrain_source_id(
+	tile_str: String,
+	generation_type: String = "dungeon",
+	cell: Vector2i = Vector2i.ZERO,
+	rooms: Array = []
+) -> int:
 	if is_wallish_tile(tile_str):
 		return SRC_WALL
 	if is_shrub_tile(tile_str):
@@ -296,9 +302,12 @@ static func terrain_source_id(tile_str: String, generation_type: String = "dunge
 	if is_door_kind(tile_str):
 		return SRC_FLOOR
 	if is_corridor_tile(tile_str):
-		if generation_type == "city" and tile_str == "road" and SRC_ROAD >= 0:
+		if generation_type == "city" and SRC_ROAD >= 0:
 			return SRC_ROAD
 		return SRC_FLOOR
+	if generation_type == "city" and SRC_ROAD >= 0:
+		if not DungeonGrid.should_use_floor_texture(cell, rooms, generation_type):
+			return SRC_ROAD
 	return SRC_FLOOR
 
 
