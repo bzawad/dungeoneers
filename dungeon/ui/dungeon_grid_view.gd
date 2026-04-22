@@ -92,6 +92,8 @@ var _encounter_token_by_cell: Dictionary = {}  # Vector2i → TextureRect
 ## Phase 5: Explorer `map_template.ex` icons (treasure, features, waypoints, …) above terrain/doors.
 var _map_cell_overlays_root: Node2D = null
 var _map_overlay_host_by_cell: Dictionary = {}  # Vector2i → Control
+## Quest targets: target_name_lower -> alignment string ("lawful"/"chaotic"/...)
+var _quest_target_glow_by_name_lower: Dictionary = {}
 
 
 func set_guards_hostile(hostile: bool) -> void:
@@ -333,8 +335,13 @@ func _sync_map_cell_overlays() -> void:
 			var layers: Array = MapCellOverlayArt.overlay_layers_for_tile_at_cell(
 				s, cell, _cell_px, _fog_enabled, _fog_clicked_cells
 			)
-			if layers.is_empty():
+			# Quest targets: overlay glow even if there are no other overlay layers.
+			var qglow: String = _quest_glow_alignment_for_tile(s)
+			if layers.is_empty() and qglow.is_empty():
 				continue
+			if not qglow.is_empty():
+				layers = layers.duplicate()
+				layers.append({"__quest_glow": true, "alignment": qglow})
 			want[cell] = layers
 	for c in _map_overlay_host_by_cell.keys():
 		if not want.has(c):
@@ -355,6 +362,9 @@ func _sync_map_cell_overlays() -> void:
 			ch.queue_free()
 		for i in range(lays.size()):
 			var d: Dictionary = lays[i] as Dictionary
+			if bool(d.get("__quest_glow", false)):
+				_apply_quest_glow_layer(host, str(d.get("alignment", "neutral")))
+				continue
 			var tex: Texture2D = d.get("texture") as Texture2D
 			if tex == null:
 				continue
@@ -376,6 +386,54 @@ func _sync_map_cell_overlays() -> void:
 				tex_rect.modulate = Color(1.0, 0.78, 0.42, 0.68)
 				TorchFlickerFx.layout_cell_torch_underlay(tex_rect, _cell_px)
 				TorchFlickerFx.start_torch_flicker_tween(tex_rect, host)
+
+
+func set_quest_target_glow_map(target_name_lower_to_alignment: Dictionary) -> void:
+	_quest_target_glow_by_name_lower = target_name_lower_to_alignment.duplicate(true)
+	_sync_map_cell_overlays()
+
+
+func _quest_glow_alignment_for_tile(tile: String) -> String:
+	if not tile.begins_with("encounter|Quest|"):
+		return ""
+	var parts := tile.split("|")
+	if parts.size() < 3:
+		return ""
+	var tgt := str(parts[2]).strip_edges().to_lower()
+	if tgt.is_empty():
+		return ""
+	if not _quest_target_glow_by_name_lower.has(tgt):
+		return ""
+	return str(_quest_target_glow_by_name_lower[tgt]).strip_edges().to_lower()
+
+
+func _apply_quest_glow_layer(host: Control, alignment: String) -> void:
+	# Remove any previous quest glow layer for this host (host is rebuilt frequently).
+	var prev := host.get_node_or_null(NodePath("QuestGlow")) as CanvasItem
+	if prev != null and is_instance_valid(prev):
+		prev.queue_free()
+	var glow := ColorRect.new()
+	glow.name = "QuestGlow"
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glow.position = Vector2.ZERO
+	glow.size = host.size
+	glow.z_index = 50
+	var a := alignment.strip_edges().to_lower()
+	if a == "lawful":
+		glow.color = Color(0.20, 0.70, 1.00, 0.22)
+	else:
+		# Default to chaotic-style glow.
+		glow.color = Color(0.80, 0.25, 0.95, 0.22)
+	host.add_child(glow)
+	# Subtle pulse to mimic Explorer's quest glow.
+	var tw := create_tween()
+	tw.set_loops()
+	tw.tween_property(glow, "modulate:a", 0.12, 0.8).set_trans(Tween.TRANS_SINE).set_ease(
+		Tween.EASE_IN_OUT
+	)
+	tw.tween_property(glow, "modulate:a", 0.26, 0.8).set_trans(Tween.TRANS_SINE).set_ease(
+		Tween.EASE_IN_OUT
+	)
 
 
 func _apply_generation_layer_modulate() -> void:

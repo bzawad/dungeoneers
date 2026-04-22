@@ -29,11 +29,27 @@ static func encounter_monster_name_from_tile(tile: String) -> String:
 	return parts[2].strip_edges() if parts.size() > 2 else "monster"
 
 
+static func _quest_role_override_for_encounter_tile(raw_tile: String, def: Dictionary) -> String:
+	# Explorer quest targets are real monsters with role "quest_monster"/"quest_npc".
+	# In the port we encode them as `encounter|Quest|<name>` so we override the role here.
+	if not raw_tile.begins_with("encounter|Quest|"):
+		return ""
+	var base_role := str(def.get("role", "")).strip_edges().to_lower()
+	if base_role == "npc" or base_role == "guard":
+		return "quest_npc"
+	return "quest_monster"
+
+
 ## Explorer `MonsterTurnSystem.hostile_monster?/3` — `player_alignment` is numeric Explorer value.
-static func effective_hunts(def: Dictionary, guards_hostile: bool, player_alignment: int) -> bool:
+static func effective_hunts(
+	def: Dictionary, raw_tile: String, guards_hostile: bool, player_alignment: int
+) -> bool:
 	if def.is_empty():
 		return false
 	var role := str(def.get("role", "")).strip_edges().to_lower()
+	var quest_role := _quest_role_override_for_encounter_tile(raw_tile, def)
+	if not quest_role.is_empty():
+		role = quest_role
 	var m_align := str(def.get("alignment", "neutral")).strip_edges().to_lower()
 	if role == "quest_npc":
 		return false
@@ -242,7 +258,7 @@ static func process_monster_reduce_pass(
 			continue
 		var mname: String = encounter_monster_name_from_tile(raw_t)
 		var def: Dictionary = MonsterTable.lookup_monster(mname)
-		if not effective_hunts(def, guards_hostile, player_alignment):
+		if not effective_hunts(def, raw_t, guards_hostile, player_alignment):
 			continue
 		snapshot.append({"snap_cell": mcell, "raw": raw_t})
 

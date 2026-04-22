@@ -656,28 +656,143 @@ static func kill_quest_target_name(quest: Dictionary) -> String:
 
 
 static func find_kill_quest_encounter_placement(
-	grid: Dictionary, authority_seed: int, quest_id: String, target_name: String
+	grid: Dictionary,
+	authority_seed: int,
+	quest_id: String,
+	target_name: String,
+	rooms_or_areas: Array = [],
+	rng_override: RandomNumberGenerator = null
 ) -> Vector2i:
+	# Explorer-style preference: structure positions (rooms/areas) + corridor positions, then fallback.
+	var structure_positions: Array[Vector2i] = _quest_spawn_structure_positions(
+		grid, rooms_or_areas
+	)
+	var corridor_positions: Array[Vector2i] = _quest_spawn_corridor_positions(grid, rooms_or_areas)
 	var candidates: Array[Vector2i] = []
+	for c in structure_positions:
+		candidates.append(c)
+	for c2 in corridor_positions:
+		candidates.append(c2)
+	if candidates.is_empty():
+		for y in DungeonGrid.MAP_HEIGHT:
+			for x in DungeonGrid.MAP_WIDTH:
+				var c3 := Vector2i(x, y)
+				var t3: String = GridWalk.tile_at(grid, c3)
+				if t3 != "floor" and t3 != "corridor":
+					continue
+				candidates.append(c3)
+	if candidates.is_empty():
+		return Vector2i(-1, -1)
+
+	var rng := rng_override
+	if rng == null:
+		rng = RandomNumberGenerator.new()
+		# User requested Explorer-like randomness (not seeded from authority).
+		rng.randomize()
+	var pick: int = rng.randi_range(0, candidates.size() - 1)
+	return candidates[pick]
+
+
+static func _quest_spawn_structure_positions(
+	grid: Dictionary, rooms_or_areas: Array
+) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for ent in rooms_or_areas:
+		if ent is not Dictionary:
+			continue
+		var d := ent as Dictionary
+		# Traditional rooms: x,y,width,height.
+		if d.has("x") and d.has("y") and d.has("width") and d.has("height"):
+			var rx: int = int(d.get("x", 0))
+			var ry: int = int(d.get("y", 0))
+			var rw: int = int(d.get("width", 0))
+			var rh: int = int(d.get("height", 0))
+			var cx := rx + int(rw / 2)
+			var cy := ry + int(rh / 2)
+			for x in range(rx, rx + rw):
+				for y in range(ry, ry + rh):
+					var c := Vector2i(x, y)
+					if GridWalk.tile_at(grid, c) != "floor":
+						continue
+					# Avoid label-center conflicts (Explorer: avoid center ±1).
+					if abs(x - cx) <= 1 and abs(y - cy) <= 1:
+						continue
+					out.append(c)
+			continue
+		# Organic areas/caverns: cells array.
+		var cells: Array = d.get("cells", []) as Array
+		if cells.is_empty():
+			continue
+		var center := _quest_spawn_area_center(cells)
+		for raw in cells:
+			if raw is not Vector2i:
+				continue
+			var c2 := raw as Vector2i
+			if GridWalk.tile_at(grid, c2) != "floor":
+				continue
+			if abs(c2.x - center.x) <= 1 and abs(c2.y - center.y) <= 1:
+				continue
+			out.append(c2)
+	return out
+
+
+static func _quest_spawn_area_center(cells: Array) -> Vector2i:
+	if cells.is_empty():
+		return Vector2i(DungeonGrid.MAP_WIDTH >> 1, DungeonGrid.MAP_HEIGHT >> 1)
+	var sx := 0
+	var sy := 0
+	var n := 0
+	for raw in cells:
+		if raw is not Vector2i:
+			continue
+		var c := raw as Vector2i
+		sx += c.x
+		sy += c.y
+		n += 1
+	if n <= 0:
+		return Vector2i(DungeonGrid.MAP_WIDTH >> 1, DungeonGrid.MAP_HEIGHT >> 1)
+	return Vector2i(int(float(sx) / float(n)), int(float(sy) / float(n)))
+
+
+static func _quest_spawn_corridor_positions(
+	grid: Dictionary, rooms_or_areas: Array
+) -> Array[Vector2i]:
+	# Explorer corridors exist for traditional dungeons; for areas/caverns most paths are "floor".
+	var has_traditional := false
+	for ent in rooms_or_areas:
+		if ent is Dictionary:
+			var d := ent as Dictionary
+			if d.has("x") and d.has("y") and d.has("width") and d.has("height"):
+				has_traditional = true
+				break
+	if not has_traditional:
+		return []
+	var out: Array[Vector2i] = []
 	for y in DungeonGrid.MAP_HEIGHT:
 		for x in DungeonGrid.MAP_WIDTH:
 			var c := Vector2i(x, y)
-			var t: String = GridWalk.tile_at(grid, c)
-			if t != "floor" and t != "corridor":
+			if GridWalk.tile_at(grid, c) != "corridor":
 				continue
-			candidates.append(c)
-	if candidates.is_empty():
-		return Vector2i(-1, -1)
-	candidates.sort_custom(
-		func(a: Vector2i, b: Vector2i) -> bool:
-			if a.y != b.y:
-				return a.y < b.y
-			return a.x < b.x
-	)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = int(hash(quest_id + "|spawn|" + target_name + "|" + str(authority_seed)))
-	var pick: int = rng.randi_range(0, candidates.size() - 1)
-	return candidates[pick]
+			if _quest_spawn_point_in_any_traditional_room(c, rooms_or_areas):
+				continue
+			out.append(c)
+	return out
+
+
+static func _quest_spawn_point_in_any_traditional_room(p: Vector2i, rooms_or_areas: Array) -> bool:
+	for ent in rooms_or_areas:
+		if ent is not Dictionary:
+			continue
+		var d := ent as Dictionary
+		if not (d.has("x") and d.has("y") and d.has("width") and d.has("height")):
+			continue
+		var rx: int = int(d.get("x", 0))
+		var ry: int = int(d.get("y", 0))
+		var rw: int = int(d.get("width", 0))
+		var rh: int = int(d.get("height", 0))
+		if p.x >= rx and p.x < rx + rw and p.y >= ry and p.y < ry + rh:
+			return true
+	return false
 
 
 static func grid_has_kill_target_encounter(grid: Dictionary, target_name: String) -> bool:
@@ -713,26 +828,9 @@ static func find_active_kill_quest_for_victory(
 static func kill_quest_completion_append_body(
 	quest: Dictionary, defeated_name: String, map_theme_name: String
 ) -> String:
-	var t := str(quest.get("type", ""))
-	if t == "npc_kill":
-		return (
-			"You eliminated "
-			+ defeated_name
-			+ " in "
-			+ map_theme_name
-			+ ". "
-			+ str(quest.get("quest_giver", "Your patron"))
-			+ " will hear of your success."
-		)
-	return (
-		"You defeated "
-		+ defeated_name
-		+ " that troubled "
-		+ map_theme_name
-		+ ". "
-		+ str(quest.get("quest_giver", "Your patron"))
-		+ " will be grateful."
-	)
+	# Reuse Explorer-aligned copy that explicitly includes rewards.
+	# Keep args (defeated_name/map_theme_name) to preserve call sites and future flexibility.
+	return achievement_text_for_completed_quest(quest)
 
 
 static func kill_quest_alignment_delta(quest: Dictionary) -> int:

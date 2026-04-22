@@ -7,6 +7,7 @@ const DungeonGenerator := preload("res://dungeon/generator/dungeon_generator.gd"
 const DungeonThemes := preload("res://dungeon/generator/dungeon_themes.gd")
 const MapTransition := preload("res://dungeon/map_transition_system.gd")
 const MapLinkSystem := preload("res://dungeon/generator/map_link_system.gd")
+const GeneratorFeatures := preload("res://dungeon/generator/generator_features.gd")
 const GridWalk := preload("res://dungeon/movement/grid_walkability.gd")
 const DungeonFog := preload("res://dungeon/fog/fog_of_war.gd")
 const DungeonFeatures := preload("res://dungeon/generator/features_dungeon.gd")
@@ -129,6 +130,8 @@ signal encounter_resolution_dialog(title: String, message: String)
 signal combat_state_changed(snapshot: Dictionary)
 ## Phase 6: Explorer `DoorSystem` — first successful **break door** on a map sets `guards_hostile` (for future wandering guards / encounters).
 signal guards_hostile_changed(hostile: bool)
+## Door-breaking noise consequence: wandering monster prompt (dungeons only).
+signal wandering_monster_offered(monster_name: String, message: String)
 ## Explorer `Movement.check_secret_doors_adjacent` — revealed secret door cells (global on map).
 signal secret_doors_delta(cells: PackedVector2Array)
 signal secret_doors_snapshot(cells: PackedVector2Array)
@@ -273,6 +276,9 @@ const SPECIAL_ITEM_PICK_SALT_TREASURE := 712_004_322
 const BREAK_DOOR_DC := 13
 ## Explorer `door_system.ex` `award_xp(10, "door broken")` on successful break.
 const BREAK_DOOR_XP := 10
+## Explorer wandering monster evade (DC 12, +5 XP).
+const WANDERING_EVADE_DC := 12
+const WANDERING_EVADE_XP := 5
 ## Explorer `DoorSystem.pick_lock` `award_xp(5, "lock picked")`.
 const LOCK_PICK_XP := 5
 const FOG_DELTA_PACK_THRESHOLD := 36
@@ -282,6 +288,12 @@ var _authority_doors_broken_count: int = 0
 var _authority_guards_hostile: bool = false
 ## Client: last value from `rpc_guards_hostile_sync` / solo mirror.
 var _client_guards_hostile: bool = false
+## Server/solo: runtime RNG for repeated-attempt rolls (break door, noise checks, wandering evasion).
+var _server_runtime_rng: RandomNumberGenerator = RandomNumberGenerator.new()
+## Server/solo: peer_id -> last door-break cell awaiting noise resolution on dialog dismissal.
+var _server_pending_door_break_noise: Dictionary = {}
+## Server/solo: peer_id -> {"monster":String,"cell":Vector2i} pending wandering monster choice.
+var _server_wandering_monster_pending: Dictionary = {}
 ## Server: globally revealed `secret_door` cells (any peer detection). Client: RPC mirror.
 var _revealed_secret_doors: Dictionary = {}
 var _client_revealed_secret_doors: Dictionary = {}
@@ -405,6 +417,10 @@ func configure_authority(
 	_server_level_hp_total_by_peer.clear()
 	_server_level_up_queue_by_peer.clear()
 	_server_level_up_waiting.clear()
+	## Attempt rolls should vary across repeated tries (Explorer uses non-deterministic Dice.roll/2).
+	_server_runtime_rng.randomize()
+	_server_pending_door_break_noise.clear()
+	_server_wandering_monster_pending.clear()
 	_fog_enabled = fog_enabled
 	if fog_type_arg.strip_edges().is_empty():
 		var meta_ft := str(generation_meta.get("fog_type", "")).strip_edges()
@@ -2101,6 +2117,15 @@ func _deliver_encounter_resolution_to_peer(peer_id: int, title: String, message:
 		rpc_encounter_resolution.rpc_id(peer_id, title, message)
 
 
+func _deliver_wandering_monster_offer_to_peer(
+	peer_id: int, monster_name: String, message: String
+) -> void:
+	if _using_solo_local() and peer_id == _solo_offline_peer:
+		wandering_monster_offered.emit(monster_name, message)
+	elif multiplayer.multiplayer_peer != null and multiplayer.is_server():
+		rpc_wandering_monster_offer.rpc_id(peer_id, monster_name, message)
+
+
 func _deliver_combat_snapshot_to_peer(peer_id: int, snapshot: Dictionary) -> void:
 	_last_combat_snapshot = snapshot.duplicate(true)
 	if _using_solo_local() and peer_id == _solo_offline_peer:
@@ -2183,6 +2208,7 @@ func _server_apply_combat_outcome(sender: int, cell: Vector2i, outcome: Dictiona
 				var xp_done: int = maxi(0, int(q_done.get("xp_reward", rg_done)))
 				_server_gold[sender] = int(_server_gold.get(sender, 0)) + rg_done
 				_server_add_xp_with_level_up(sender, xp_done)
+				outcome["quest_completed"] = true
 				var dqk: int = PlayerQuests.kill_quest_alignment_delta(q_done)
 				if dqk != 0:
 					var cur_aq := int(
@@ -2235,6 +2261,7 @@ func _server_apply_finished_combat_to_snapshot(snap: Dictionary, outcome: Dictio
 	snap["finished"] = true
 	snap["victory"] = bool(outcome.get("victory", false))
 	snap["flee_success"] = bool(outcome.get("flee_success", false))
+	snap["quest_completed"] = bool(outcome.get("quest_completed", false))
 	snap["victory_treasure_gold"] = maxi(0, int(outcome.get("treasure_gold", 0)))
 	snap["outcome_title"] = str(outcome.get("title", "Combat"))
 	snap["outcome_body"] = str(outcome.get("body", ""))
@@ -4146,7 +4173,7 @@ func _server_try_spawn_kill_quest_encounters_for_peer(peer_id: int) -> void:
 			continue
 		var qid_k := str(qk.get("id", "")).strip_edges()
 		var place_k: Vector2i = PlayerQuests.find_kill_quest_encounter_placement(
-			_authority_grid, _authority_seed, qid_k, tgt
+			_authority_grid, _authority_seed, qid_k, tgt, _authority_rooms
 		)
 		if place_k.x < 0:
 			continue
@@ -4388,6 +4415,60 @@ func _server_start_combat_with_monster(sender: int, rng_cell: Vector2i, mname: S
 	_deliver_combat_snapshot_to_peer(sender, snap_cm)
 	if session_cm.monster_turn_pending():
 		_server_schedule_pending_monster_strike(sender)
+
+
+func _server_handle_wandering_monster_fight(sender: int) -> void:
+	var pend: Variant = _server_wandering_monster_pending.get(sender, null)
+	if pend == null or not pend is Dictionary:
+		return
+	var d: Dictionary = pend as Dictionary
+	var mname := str(d.get("monster", "")).strip_edges()
+	var cell: Vector2i = d.get("cell", Vector2i(-1, -1)) as Vector2i
+	_server_wandering_monster_pending.erase(sender)
+	if mname.is_empty() or cell.x < 0:
+		return
+	_server_start_combat_with_monster(sender, cell, mname)
+
+
+func _server_handle_wandering_monster_evade(sender: int) -> void:
+	var pend: Variant = _server_wandering_monster_pending.get(sender, null)
+	if pend == null or not pend is Dictionary:
+		return
+	var d: Dictionary = pend as Dictionary
+	var mname := str(d.get("monster", "")).strip_edges()
+	var cell: Vector2i = d.get("cell", Vector2i(-1, -1)) as Vector2i
+	_server_wandering_monster_pending.erase(sender)
+	if mname.is_empty() or cell.x < 0:
+		return
+	var role := str(_peer_roles.get(sender, "rogue"))
+	var bonus := PlayerCombatStats.dex_pick_bonus_for_role(role)
+	var d20 := _server_runtime_rng.randi_range(1, 20)
+	var total := d20 + bonus
+	if total >= WANDERING_EVADE_DC:
+		_server_add_xp_with_level_up(sender, WANDERING_EVADE_XP)
+		_emit_stats_for_peer(sender)
+		_deliver_encounter_resolution_to_peer(
+			sender,
+			"Evaded!",
+			(
+				"Success! You quietly slip away before the wandering "
+				+ mname
+				+ " notices you.\n\n(Rolled "
+				+ str(d20)
+				+ " + "
+				+ str(bonus)
+				+ " dexterity = "
+				+ str(total)
+				+ " vs DC "
+				+ str(WANDERING_EVADE_DC)
+				+ ")\n\nYou gain "
+				+ str(WANDERING_EVADE_XP)
+				+ " XP."
+			)
+		)
+		return
+	## Failed evasion: start combat immediately (avoid extra modal/ack wiring).
+	_server_start_combat_with_monster(sender, cell, mname)
 
 
 func _server_handle_world_interaction(sender: int, cell: Vector2i) -> void:
@@ -4719,6 +4800,8 @@ func _server_apply_map_transition(
 		_server_broadcast_achievements_to_peer(_solo_offline_peer)
 		return
 	if multiplayer.multiplayer_peer != null and multiplayer.is_server():
+		# Explorer parity: quest spawns exist before clients receive the new-authority snapshot.
+		_server_try_place_active_quest_items_for_all_peers()
 		for pid3 in peer_ids:
 			var p3 := int(pid3)
 			var role_w := str(_peer_roles.get(p3, _welcome_role_echo))
@@ -4733,7 +4816,6 @@ func _server_apply_map_transition(
 			_server_broadcast_quests_to_peer(p3)
 			_server_broadcast_achievements_to_peer(p3)
 		_broadcast_all_positions()
-		call_deferred("_server_try_place_active_quest_items_for_all_peers")
 		var n_clients := multiplayer.get_peers().size()
 		server_world_meta_changed.emit(
 			_authority_seed,
@@ -5551,8 +5633,7 @@ func _server_handle_door_confirm(sender: int, action: String, cell: Vector2i) ->
 		if not _unpickable_doors.has(cell) or _unlocked_doors.has(cell):
 			print("[Dungeoneers] break_door rejected: not unpickable locked door cell=", cell)
 			return
-		var rng_br := _rng_door_cell(sender, cell, 77)
-		var br: int = rng_br.randi_range(1, 20)
+		var br: int = _server_runtime_rng.randi_range(1, 20)
 		var broke_ok := br >= BREAK_DOOR_DC
 		if broke_ok:
 			_unpickable_doors.erase(cell)
@@ -5560,7 +5641,11 @@ func _server_handle_door_confirm(sender: int, action: String, cell: Vector2i) ->
 			_server_apply_unlock(cell)
 			_authority_doors_broken_count += 1
 			var guard_alert := ""
-			if _authority_doors_broken_count == 1 and not _authority_guards_hostile:
+			if (
+				_generation_type.strip_edges().to_lower() == "city"
+				and _authority_doors_broken_count == 1
+				and not _authority_guards_hostile
+			):
 				_authority_guards_hostile = true
 				guard_alert = "\n\nThe racket alerts nearby guards — they are now hostile toward you."
 				print("[Dungeoneers] guards_hostile=true reason=door_breaking peer_id=", sender)
@@ -5604,6 +5689,48 @@ func _server_handle_door_confirm(sender: int, action: String, cell: Vector2i) ->
 				)
 			)
 			print("[Dungeoneers] break_door fail peer_id=", sender, " cell=", cell, " roll=", br)
+		## Noise consequences happen on result dismissal (avoid stacked modals).
+		_server_pending_door_break_noise[sender] = cell
+		return
+	if action == "break_result_ack":
+		var pend: Variant = _server_pending_door_break_noise.get(sender, null)
+		if pend == null or not pend is Vector2i:
+			return
+		var pend_cell := pend as Vector2i
+		if pend_cell != cell:
+			return
+		_server_pending_door_break_noise.erase(sender)
+		_server_wandering_monster_pending.erase(sender)
+		if not _player_positions.has(sender):
+			return
+		var gen := _generation_type.strip_edges().to_lower()
+		if gen == "city":
+			if not _authority_guards_hostile and _server_runtime_rng.randi_range(1, 6) == 1:
+				_authority_guards_hostile = true
+				print("[Dungeoneers] guards_hostile=true reason=door_break_noise peer_id=", sender)
+				_broadcast_guards_hostile()
+				_deliver_encounter_resolution_to_peer(
+					sender,
+					"Guards alerted",
+					"The noise draws the attention of nearby guards — they are now hostile toward you.",
+				)
+			return
+		if _server_runtime_rng.randi_range(1, 6) != 1:
+			return
+		DungeonThemes.load_themes()
+		var theme_row: Dictionary = DungeonThemes.find_theme_by_name(_authority_theme_name)
+		if theme_row.is_empty():
+			theme_row = {"fog_type": _fog_type, "monsters": []}
+		var mname := GeneratorFeatures.pick_monster_for_theme_with_fog_type(
+			theme_row, _server_runtime_rng, _dungeon_level, _player_level
+		)
+		if mname.strip_edges().is_empty():
+			return
+		var pc: Vector2i = _player_positions[sender]
+		_server_wandering_monster_pending[sender] = {"monster": mname, "cell": pc}
+		_deliver_wandering_monster_offer_to_peer(
+			sender, mname, "The noise attracts a wandering %s!" % mname
+		)
 		return
 	if action == "unlock":
 		if not GridWalk.is_locked_door_tile(t):
@@ -5827,6 +5954,28 @@ func client_request_feature_ambush_ack() -> void:
 	rpc_request_feature_ambush_ack.rpc_id(SERVER_PEER_ID)
 
 
+func client_request_wandering_monster_fight() -> void:
+	if _using_solo_local():
+		_server_handle_wandering_monster_fight(_solo_offline_peer)
+		return
+	if multiplayer.is_server():
+		return
+	if multiplayer.multiplayer_peer == null:
+		return
+	rpc_request_wandering_monster_fight.rpc_id(SERVER_PEER_ID)
+
+
+func client_request_wandering_monster_evade() -> void:
+	if _using_solo_local():
+		_server_handle_wandering_monster_evade(_solo_offline_peer)
+		return
+	if multiplayer.is_server():
+		return
+	if multiplayer.multiplayer_peer == null:
+		return
+	rpc_request_wandering_monster_evade.rpc_id(SERVER_PEER_ID)
+
+
 @rpc("any_peer", "call_remote", "reliable")
 func rpc_request_trapped_treasure_undetected_ack(cell_x: int, cell_y: int) -> void:
 	if not multiplayer.is_server():
@@ -5888,6 +6037,26 @@ func rpc_request_feature_ambush_ack() -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable")
+func rpc_request_wandering_monster_fight() -> void:
+	if not multiplayer.is_server():
+		return
+	var s := multiplayer.get_remote_sender_id()
+	if s == 0:
+		return
+	_server_handle_wandering_monster_fight(s)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func rpc_request_wandering_monster_evade() -> void:
+	if not multiplayer.is_server():
+		return
+	var s := multiplayer.get_remote_sender_id()
+	if s == 0:
+		return
+	_server_handle_wandering_monster_evade(s)
+
+
+@rpc("any_peer", "call_remote", "reliable")
 func rpc_request_encounter_fight(cell_x: int, cell_y: int) -> void:
 	if not multiplayer.is_server():
 		return
@@ -5932,6 +6101,13 @@ func rpc_encounter_resolution(title: String, message: String) -> void:
 	if multiplayer.is_server():
 		return
 	encounter_resolution_dialog.emit(title, message)
+
+
+@rpc("authority", "call_remote", "reliable")
+func rpc_wandering_monster_offer(monster_name: String, message: String) -> void:
+	if multiplayer.is_server():
+		return
+	wandering_monster_offered.emit(monster_name, message)
 
 
 @rpc("authority", "call_remote", "reliable")

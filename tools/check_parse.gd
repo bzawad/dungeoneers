@@ -549,31 +549,31 @@ func _init() -> void:
 		push_error("check_parse: Guard CSV alignment expected lawful")
 		quit(1)
 		return
-	if MonsterTurn.effective_hunts(def_guard, false, 0):
+	if MonsterTurn.effective_hunts(def_guard, "encounter|Any|Guard", false, 0):
 		push_error("check_parse: peaceful guard neutral player should not hunt")
 		quit(1)
 		return
-	if not MonsterTurn.effective_hunts(def_guard, true, 0):
+	if not MonsterTurn.effective_hunts(def_guard, "encounter|Any|Guard", true, 0):
 		push_error("check_parse: guards_hostile should make guard hunt")
 		quit(1)
 		return
-	if not MonsterTurn.effective_hunts(def_guard, false, -3):
+	if not MonsterTurn.effective_hunts(def_guard, "encounter|Any|Guard", false, -3):
 		push_error("check_parse: chaotic player vs lawful guard should hunt")
 		quit(1)
 		return
 	var def_rat: Dictionary = MonsterTable.lookup_monster("Rat")
-	if MonsterTurn.effective_hunts(def_rat, false, 0):
+	if MonsterTurn.effective_hunts(def_rat, "encounter|Any|Rat", false, 0):
 		push_error(
 			"check_parse: Rat should not hunt neutral visitor (Explorer hunts_player?: false)"
 		)
 		quit(1)
 		return
 	var def_merch: Dictionary = MonsterTable.lookup_monster("Merchant")
-	if MonsterTurn.effective_hunts(def_merch, false, 0):
+	if MonsterTurn.effective_hunts(def_merch, "encounter|Any|Merchant", false, 0):
 		push_error("check_parse: Merchant npc should not hunt neutral player")
 		quit(1)
 		return
-	if not MonsterTurn.effective_hunts(def_merch, false, -2):
+	if not MonsterTurn.effective_hunts(def_merch, "encounter|Any|Merchant", false, -2):
 		push_error("check_parse: Merchant should hunt chaotic player (alignment clash)")
 		quit(1)
 		return
@@ -1214,6 +1214,43 @@ func _init() -> void:
 	kq_syn["quest_alignment"] = "chaotic"
 	if PlayerQuests.kill_quest_alignment_delta(kq_syn) != -37:
 		push_error("check_parse: kill_quest_alignment_delta chaotic")
+		quit(1)
+		return
+
+	# Quest target spawning helpers: placement prefers structure/corridor candidates and supports RNG override.
+	var q_grid: Dictionary = {}
+	var q_room: Dictionary = {"x": 2, "y": 2, "width": 6, "height": 6}
+	for y in range(2, 2 + 6):
+		for x in range(2, 2 + 6):
+			q_grid[Vector2i(x, y)] = "floor"
+	# Add a small corridor run outside the room.
+	for x2 in range(0, 5):
+		q_grid[Vector2i(x2, 1)] = "corridor"
+	var q_rng := RandomNumberGenerator.new()
+	q_rng.seed = 12_345
+	var q_pick: Vector2i = PlayerQuests.find_kill_quest_encounter_placement(
+		q_grid, 999, "npc_1", "Rat", [q_room], q_rng
+	)
+	if q_pick.x < 0:
+		push_error("check_parse: kill-quest placement returned empty")
+		quit(1)
+		return
+	var q_tile: String = str(q_grid.get(q_pick, "wall"))
+	if q_tile != "floor" and q_tile != "corridor":
+		push_error("check_parse: kill-quest placement returned non-walkable tile")
+		quit(1)
+		return
+
+	# Quest role override for AI: encounter|Quest| should behave like Explorer quest roles.
+	const MonsterTurnSystem := preload("res://dungeon/monster/monster_turn_system.gd")
+	var def_npc := {"role": "npc", "alignment": "lawful", "hunts_player": false}
+	if MonsterTurnSystem.effective_hunts(def_npc, "encounter|Quest|Villager", false, 0):
+		push_error("check_parse: quest_npc should not hunt")
+		quit(1)
+		return
+	var def_mon := {"role": "", "alignment": "chaotic", "hunts_player": false}
+	if not MonsterTurnSystem.effective_hunts(def_mon, "encounter|Quest|Ogre", false, 0):
+		push_error("check_parse: quest_monster should always hunt")
 		quit(1)
 		return
 	var ach_si: Dictionary = {

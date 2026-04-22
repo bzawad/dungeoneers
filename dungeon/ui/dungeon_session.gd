@@ -130,6 +130,13 @@ var _encounter_message_label: Label = null
 var _encounter_fight_btn: Button = null
 var _encounter_evade_btn: Button = null
 var _pending_encounter_cell: Vector2i = Vector2i.ZERO
+var _wandering_window: Window = null
+var _wandering_header_icon: TextureRect = null
+var _wandering_title_label: Label = null
+var _wandering_message_label: Label = null
+var _wandering_fight_btn: Button = null
+var _wandering_evade_btn: Button = null
+var _wandering_monster_name: String = ""
 var _npc_quest_offer_window: Window = null
 var _npc_quest_offer_label: Label = null
 var _npc_quest_accept_btn: Button = null
@@ -173,6 +180,7 @@ var _combat_finish_body: String = ""
 var _combat_finish_victory: bool = false
 var _combat_finish_flee_success: bool = false
 var _combat_finish_treasure: int = 0
+var _combat_finish_quest_completed: bool = false
 var _victory_window: Window = null
 var _victory_body_label: Label = null
 var _victory_action_btn: Button = null
@@ -224,6 +232,7 @@ var _last_attack_bonus: int = 0
 var _last_weapon_name: String = ""
 var _last_weapon_damage_dice: String = ""
 var _hud_theme_title: String = ""
+var _current_theme_name: String = ""
 var _hud_dungeon_level: int = 1
 ## P7-09: co-op / solo display name from welcome + `player_display_name_changed`.
 var _last_display_name: String = "Explorer"
@@ -313,8 +322,10 @@ func start_local(authority_seed: int, theme_direction: String) -> void:
 	var tn := str(result.get("theme", "")).strip_edges()
 	if not tn.is_empty():
 		_hud_theme_title = tn
+		_current_theme_name = tn
 	else:
 		_hud_theme_title = "Ancient Castle" if theme == "up" else "Dark Caverns"
+		_current_theme_name = _hud_theme_title
 	_hud_dungeon_level = 1
 	var st0: Dictionary = PlayerCombatStats.for_role("rogue")
 	_last_armor_class = int(st0.get("armor_class", 12))
@@ -413,6 +424,8 @@ func start_from_grid(
 		net_rep.authority_tile_patched.connect(_on_authority_tile_patched)
 		net_rep.player_local_stats_changed.connect(_on_player_local_stats_changed)
 		net_rep.encounter_resolution_dialog.connect(_on_encounter_resolution_dialog)
+		if net_rep.has_signal("wandering_monster_offered"):
+			net_rep.wandering_monster_offered.connect(_on_wandering_monster_offered)
 		net_rep.combat_state_changed.connect(_on_combat_state_changed)
 		if net_rep.has_signal("player_rumors_updated"):
 			net_rep.player_rumors_updated.connect(_on_player_rumors_updated)
@@ -504,6 +517,11 @@ func reload_from_authority(grid: Dictionary, seed_for_log: int, welcome: Diction
 			and _net_rep.peer_display_names_updated.is_connected(_on_peer_display_names_updated)
 		):
 			_net_rep.peer_display_names_updated.disconnect(_on_peer_display_names_updated)
+		if (
+			_net_rep.has_signal("wandering_monster_offered")
+			and _net_rep.wandering_monster_offered.is_connected(_on_wandering_monster_offered)
+		):
+			_net_rep.wandering_monster_offered.disconnect(_on_wandering_monster_offered)
 		_net_view_signals_bound = false
 	last_seed = seed_for_log
 	_path_grid = grid
@@ -811,6 +829,95 @@ func _ensure_encounter_choice_window() -> void:
 	vb.add_child(row)
 
 	_apply_encounter_choice_window_chrome()
+
+
+func _ensure_wandering_monster_window() -> void:
+	if _wandering_window != null:
+		return
+	_wandering_window = Window.new()
+	_wandering_window.name = "WanderingMonsterWindow"
+	_wandering_window.title = "Wandering Monster!"
+	_wandering_window.size = Vector2i(520, 280)
+	_wandering_window.popup_window = true
+	_wandering_window.unresizable = true
+	_wandering_window.transient = true
+	_wandering_window.exclusive = true
+	_wandering_window.visible = false
+	_wandering_window.close_requested.connect(_on_wandering_window_close_requested)
+	add_child(_wandering_window)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	_wandering_window.add_child(margin)
+
+	var vb := VBoxContainer.new()
+	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb.add_theme_constant_override(&"separation", 12)
+	margin.add_child(vb)
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override(&"separation", 12)
+	_wandering_header_icon = TextureRect.new()
+	_wandering_header_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_wandering_header_icon.custom_minimum_size = Vector2(48, 48)
+	_wandering_header_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	header.add_child(_wandering_header_icon)
+	_wandering_title_label = Label.new()
+	_wandering_title_label.text = "Wandering Monster!"
+	_wandering_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(_wandering_title_label)
+	vb.add_child(header)
+
+	_wandering_message_label = Label.new()
+	_wandering_message_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_wandering_message_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_wandering_message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_wandering_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_wandering_message_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	vb.add_child(_wandering_message_label)
+
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 16)
+	_wandering_fight_btn = Button.new()
+	_wandering_fight_btn.text = "Fight!"
+	var sw_tex := _explorer_img_texture("swords.png")
+	if sw_tex != null:
+		_wandering_fight_btn.icon = sw_tex
+	_wandering_fight_btn.pressed.connect(_on_wandering_fight_pressed)
+	row.add_child(_wandering_fight_btn)
+	_wandering_evade_btn = Button.new()
+	_wandering_evade_btn.text = "Evade"
+	var ev_tex := _explorer_img_texture("evade.png")
+	if ev_tex != null:
+		_wandering_evade_btn.icon = ev_tex
+	_wandering_evade_btn.pressed.connect(_on_wandering_evade_pressed)
+	row.add_child(_wandering_evade_btn)
+	vb.add_child(row)
+
+	_apply_wandering_monster_window_chrome()
+
+
+func _apply_wandering_monster_window_chrome() -> void:
+	if _wandering_window == null:
+		return
+	ExplorerModalChrome.style_window_panel(_wandering_window, "yellow")
+	if _wandering_title_label != null:
+		ExplorerModalChrome.style_title_label(_wandering_title_label, "yellow")
+	if _wandering_message_label != null:
+		ExplorerModalChrome.style_body_label(_wandering_message_label, "yellow")
+	if _wandering_fight_btn != null:
+		ExplorerModalChrome.style_button(_wandering_fight_btn, "warning", false)
+	if _wandering_evade_btn != null:
+		ExplorerModalChrome.style_button(_wandering_evade_btn, "secondary", false)
+	if _wandering_fight_btn != null:
+		ExplorerModalChrome.tighten_button_for_modal_icon_row(_wandering_fight_btn)
+	if _wandering_evade_btn != null:
+		ExplorerModalChrome.tighten_button_for_modal_icon_row(_wandering_evade_btn)
 
 
 func _apply_encounter_choice_window_chrome() -> void:
@@ -1123,6 +1230,11 @@ func _on_encounter_window_close_requested() -> void:
 	_on_encounter_evade_pressed()
 
 
+func _on_wandering_window_close_requested() -> void:
+	## Close behaves like Evade (secondary action).
+	_on_wandering_evade_pressed()
+
+
 func _on_encounter_fight_pressed() -> void:
 	_clear_combat_finish_timer()
 	## Explorer `fight_encounter` — `play_audio` `fight` before `CombatSystem.start_combat` (no click).
@@ -1145,6 +1257,29 @@ func _on_encounter_evade_pressed() -> void:
 		_net_rep.client_request_encounter_evade(c2.x, c2.y)
 
 
+func _hide_wandering_monster_window() -> void:
+	if _wandering_window != null:
+		_wandering_window.hide()
+	_set_grid_hover_polish_for_modal(false)
+
+
+func _on_wandering_fight_pressed() -> void:
+	_clear_combat_finish_timer()
+	_explorer_audio().play_combat_sfx("fight", "")
+	_hide_wandering_monster_window()
+	_wandering_monster_name = ""
+	if _net_rep != null and _net_rep.has_method("client_request_wandering_monster_fight"):
+		_net_rep.client_request_wandering_monster_fight()
+
+
+func _on_wandering_evade_pressed() -> void:
+	_explorer_audio().play_click()
+	_hide_wandering_monster_window()
+	_wandering_monster_name = ""
+	if _net_rep != null and _net_rep.has_method("client_request_wandering_monster_evade"):
+		_net_rep.client_request_wandering_monster_evade()
+
+
 func _on_encounter_resolution_dialog(title: String, message: String) -> void:
 	_pending_victory_treasure_gold = 0
 	if title == "Death":
@@ -1157,6 +1292,26 @@ func _on_encounter_resolution_dialog(title: String, message: String) -> void:
 		_explorer_audio().play_combat_sfx("monster_hit", "")
 	if title == "Treasure found":
 		_explorer_audio().play_chest_open()
+
+
+func _on_wandering_monster_offered(monster_name: String, message: String) -> void:
+	_ensure_wandering_monster_window()
+	_wandering_monster_name = monster_name
+	if _wandering_message_label != null:
+		_wandering_message_label.text = message
+	if _wandering_title_label != null:
+		_wandering_title_label.text = "Wandering Monster!"
+	if _wandering_window != null:
+		_wandering_window.title = "Wandering Monster!"
+	if _wandering_header_icon != null:
+		var tex := _explorer_img_texture("swords.png")
+		_wandering_header_icon.texture = tex
+		_wandering_header_icon.visible = tex != null
+	_apply_wandering_monster_window_chrome()
+	if _wandering_window != null:
+		_wandering_window.popup_centered()
+	_defer_grab_focus(_wandering_fight_btn)
+	_set_grid_hover_polish_for_modal(true)
 
 
 func _on_encounter_res_ok_pressed() -> void:
@@ -1310,17 +1465,28 @@ func _on_victory_action_pressed() -> void:
 func _show_victory_after_combat() -> void:
 	_ensure_victory_window()
 	var tg := _combat_finish_treasure
+	var quest_block := ""
+	if _combat_finish_quest_completed:
+		var idx := _combat_finish_body.find("Quest Completed:")
+		if idx != -1:
+			quest_block = "\n\n" + _combat_finish_body.substr(idx).strip_edges()
 	if tg > 0:
 		_victory_body_label.text = (
-			"You have defeated the monster!\n\nYou find %d gold pieces in the aftermath of the battle."
-			% tg
+			(
+				"You have defeated the monster!\n\nYou find %d gold pieces in the aftermath of the battle."
+				% tg
+			)
+			+ quest_block
 		)
 		_victory_action_btn.text = "  Collect Treasure  "
 		var gtx := _explorer_img_texture("gold.png")
 		if gtx != null:
 			_victory_action_btn.icon = gtx
 	else:
-		_victory_body_label.text = ("You have defeated the monster!\n\nYou search the area but find no treasure.")
+		_victory_body_label.text = (
+			("You have defeated the monster!\n\nYou search the area but find no treasure.")
+			+ quest_block
+		)
 		_victory_action_btn.text = "Continue"
 		_victory_action_btn.icon = null
 	ExplorerModalChrome.style_button(_victory_action_btn, "success", false)
@@ -1915,6 +2081,8 @@ func _on_combat_finish_timer_tick() -> void:
 		_combat_window.hide()
 	_set_grid_hover_polish_for_modal(false)
 	if _combat_finish_victory:
+		if _combat_finish_quest_completed:
+			_explorer_audio().play_quest_completion_fanfare()
 		_pending_victory_treasure_gold = _combat_finish_treasure
 		_show_victory_after_combat()
 	elif _combat_finish_flee_success:
@@ -1969,6 +2137,7 @@ func _on_combat_state_changed(snapshot: Dictionary) -> void:
 		_combat_finish_body = str(snapshot.get("outcome_body", snapshot.get("log_full", "")))
 		_combat_finish_victory = bool(snapshot.get("victory", false))
 		_combat_finish_treasure = int(snapshot.get("victory_treasure_gold", 0))
+		_combat_finish_quest_completed = bool(snapshot.get("quest_completed", false))
 		var finish_delay_timer := get_tree().create_timer(1.0)
 		_combat_finish_timer = finish_delay_timer
 		finish_delay_timer.timeout.connect(_on_combat_finish_timer_tick, CONNECT_ONE_SHOT)
@@ -2283,6 +2452,7 @@ func _on_door_ok_pressed() -> void:
 	var cy := _pending_door_cell.y
 	_pending_door_action = ""
 	if a == "break_result":
+		_net_rep.client_request_door_confirm("break_result_ack", cx, cy)
 		return
 	if a == "trap_disarm_result":
 		_net_rep.client_request_door_confirm("trap_disarm_ack", cx, cy)
@@ -3236,7 +3406,46 @@ func _on_room_trap_disarm_pressed() -> void:
 
 func _on_player_quests_updated(rows: PackedStringArray) -> void:
 	_quest_rows = rows
+	_sync_quest_target_glow_to_grid()
 	_refresh_stats_hud_text()
+
+
+func _sync_quest_target_glow_to_grid() -> void:
+	if _grid_view == null or not _grid_view.has_method("set_quest_target_glow_map"):
+		return
+	_grid_view.call(
+		"set_quest_target_glow_map", _quest_target_glow_map_for_theme(_current_theme_name)
+	)
+
+
+func _quest_target_glow_map_for_theme(theme_name: String) -> Dictionary:
+	# Returns: target_name_lower -> alignment_string ("lawful"|"chaotic"|...)
+	var out: Dictionary = {}
+	var tn := theme_name.strip_edges()
+	if tn.is_empty():
+		return out
+	for i in range(_quest_rows.size()):
+		var v: Variant = JSON.parse_string(str(_quest_rows[i]))
+		if v is not Dictionary:
+			continue
+		var q := v as Dictionary
+		if str(q.get("status", "")) != "active":
+			continue
+		var qt := str(q.get("type", "")).strip_edges()
+		if qt != "monster_kill" and qt != "npc_kill":
+			continue
+		if str(q.get("target_theme", "")).strip_edges() != tn:
+			continue
+		var target := ""
+		if qt == "npc_kill":
+			target = str(q.get("target_npc", "")).strip_edges()
+		else:
+			target = str(q.get("target_monster", "")).strip_edges()
+		if target.is_empty():
+			continue
+		var align := str(q.get("quest_alignment", "neutral")).strip_edges().to_lower()
+		out[target.to_lower()] = align
+	return out
 
 
 func _on_player_achievements_updated(lines: PackedStringArray) -> void:
@@ -3320,10 +3529,13 @@ func _apply_hud_welcome_metadata(welcome: Dictionary) -> void:
 	var tn := str(welcome.get("theme_name", "")).strip_edges()
 	if not tn.is_empty():
 		_hud_theme_title = tn
+		_current_theme_name = tn
 	elif _hud_theme_title.is_empty():
 		_hud_theme_title = "Dungeon"
+		_current_theme_name = _hud_theme_title
 	_hud_dungeon_level = maxi(1, int(welcome.get("dungeon_level", 1)))
 	_refresh_stats_hud_text()
+	_sync_quest_target_glow_to_grid()
 
 
 func _on_peer_display_names_updated(names: Dictionary) -> void:
