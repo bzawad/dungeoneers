@@ -40,6 +40,11 @@ static func ensure_loaded() -> void:
 			var a_raw := str(row[13]).strip_edges().to_lower()
 			if a_raw == "lawful" or a_raw == "chaotic" or a_raw == "neutral":
 				align_s = a_raw
+		var size_f := 1.0
+		if row.size() > 9:
+			var sz_raw := str(row[9]).strip_edges()
+			if sz_raw.is_valid_float():
+				size_f = float(sz_raw)
 		var rec := {
 			"name": name,
 			"image": str(row[1]) if row.size() > 1 else "",
@@ -50,6 +55,7 @@ static func ensure_loaded() -> void:
 			"weapon": str(row[6]) if row.size() > 6 else "Claw",
 			"treasure": str(row[7]).strip_edges() if row.size() > 7 else "",
 			"rarity": str(row[8]).strip_edges().to_lower() if row.size() > 8 else "common",
+			"size": size_f,
 			"role": role_s,
 			"hunts_player": hunts_p,
 			"alignment": align_s,
@@ -138,3 +144,45 @@ static func pick_random_global_by_rarity_max_cr(
 	if pool.is_empty():
 		return "Rat"
 	return pool[rng.randi_range(0, pool.size() - 1)]
+
+
+## Explorer `DungeonWeb.DungeonLive.MapTemplate.convert_size_to_css_classes/1` at 48px cell base
+## (`size_classes_*` in `map_template.ex`) — used for on-map encounter token width/height.
+static func monster_map_token_base_px(size: float) -> int:
+	var s := size
+	if s > 3.0:
+		return 48
+	if s <= 0.5:
+		if _monster_size_key_eq(s, 0.25):
+			return 12
+		if _monster_size_key_eq(s, 0.5):
+			return 24
+		return 24
+	if s <= 1.0:
+		if _monster_size_key_eq(s, 0.75):
+			return 36
+		return 48
+	if s <= 2.0:
+		if _monster_size_key_eq(s, 1.25):
+			return 60
+		if _monster_size_key_eq(s, 1.5):
+			return 72
+		if _monster_size_key_eq(s, 1.75):
+			return 84
+		if _monster_size_key_eq(s, 2.0):
+			return 96
+		return 96
+	# s in (2.0, 3.0]
+	if _monster_size_key_eq(s, 2.25):
+		return 108
+	if _monster_size_key_eq(s, 2.5):
+		return 120
+	if _monster_size_key_eq(s, 2.75):
+		return 132
+	if _monster_size_key_eq(s, 3.0):
+		return 144
+	return 144
+
+
+static func _monster_size_key_eq(a: float, b: float) -> bool:
+	return absf(a - b) < 0.001

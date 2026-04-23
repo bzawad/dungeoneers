@@ -584,6 +584,23 @@ func _init() -> void:
 		)
 		quit(1)
 		return
+	if MonsterTable.monster_map_token_base_px(0.75) != 36:
+		push_error("check_parse: monster_map_token_base_px(0.75) expected 36 (Explorer map tier)")
+		quit(1)
+		return
+	if MonsterTable.monster_map_token_base_px(1.0) != 48:
+		push_error("check_parse: monster_map_token_base_px(1.0) expected 48 (Explorer map tier)")
+		quit(1)
+		return
+	if MonsterTable.monster_map_token_base_px(2.0) != 96:
+		push_error("check_parse: monster_map_token_base_px(2.0) expected 96 (Explorer map tier)")
+		quit(1)
+		return
+	var def_ant: Dictionary = MonsterTable.lookup_monster("Ant")
+	if absf(float(def_ant.get("size", 0.0)) - 0.75) > 0.001:
+		push_error("check_parse: Ant monster size from CSV expected 0.75")
+		quit(1)
+		return
 	const GenFeat := preload("res://dungeon/generator/generator_features.gd")
 	var themes_json := FileAccess.get_file_as_string("res://dungeon/data/themes.json")
 	var themes_parsed: Variant = JSON.parse_string(themes_json)

@@ -14,6 +14,7 @@ const DungeonDoorOverlays := preload("res://dungeon/ui/dungeon_door_overlays.gd"
 const GridWalk := preload("res://dungeon/movement/grid_walkability.gd")
 const PartyMarkerArt := preload("res://dungeon/ui/party_marker_art.gd")
 const EncounterMapToken := preload("res://dungeon/ui/encounter_map_token.gd")
+const MonsterTable := preload("res://dungeon/combat/monster_table.gd")
 const MapCellOverlayArt := preload("res://dungeon/ui/map_cell_overlay_art.gd")
 const TorchFlickerFx := preload("res://dungeon/ui/torch_flicker_fx.gd")
 
@@ -278,6 +279,7 @@ func _sync_encounter_monster_tokens() -> void:
 	if _tile_layer == null:
 		return
 	_ensure_encounter_tokens_root()
+	## Vector2i → encounter tile string (need monster name for Explorer `monster.size` token scaling).
 	var want: Dictionary = {}
 	for y in range(DungeonGrid.MAP_HEIGHT):
 		for x in range(DungeonGrid.MAP_WIDTH):
@@ -289,29 +291,48 @@ func _sync_encounter_monster_tokens() -> void:
 			var tex: Texture2D = EncounterMapToken.texture_for_encounter_tile(s)
 			if tex == null:
 				continue
-			want[cell] = tex
+			want[cell] = s
 	for c in _encounter_token_by_cell.keys():
 		if not want.has(c):
 			_remove_encounter_token(c)
 	for cell2 in want.keys():
-		var t2: Texture2D = want[cell2] as Texture2D
+		var tile_s: String = str(want[cell2])
+		var t2: Texture2D = EncounterMapToken.texture_for_encounter_tile(tile_s)
+		if t2 == null:
+			continue
 		var existing: TextureRect = _encounter_token_by_cell.get(cell2) as TextureRect
 		if existing != null and is_instance_valid(existing):
 			existing.texture = t2
+			_apply_encounter_token_layout(cell2, existing, tile_s)
 			continue
 		var enc_rect := TextureRect.new()
 		enc_rect.texture = t2
 		enc_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		enc_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		enc_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var inset := float(_cell_px) * 0.12
-		enc_rect.position = Vector2(
-			float(cell2.x * _cell_px) + inset, float(cell2.y * _cell_px) + inset
-		)
-		enc_rect.size = Vector2(float(_cell_px) - 2.0 * inset, float(_cell_px) - 2.0 * inset)
 		enc_rect.modulate = Color(1.0, 1.0, 1.0, 0.92)
+		_apply_encounter_token_layout(cell2, enc_rect, tile_s)
 		_encounter_tokens_root.add_child(enc_rect)
 		_encounter_token_by_cell[cell2] = enc_rect
+
+
+## Explorer `map_template.ex` `get_monster_image_size` / 48px cell; scale when `_cell_px` ≠ 48 (atlas zoom).
+func _apply_encounter_token_layout(cell: Vector2i, enc_rect: TextureRect, tile_str: String) -> void:
+	var mname := EncounterMapToken.monster_name_from_encounter_tile(tile_str)
+	var def := MonsterTable.lookup_monster(mname)
+	var raw_sz: Variant = def.get("size", 1.0)
+	var size_f: float = 1.0
+	if raw_sz is float:
+		size_f = raw_sz as float
+	elif raw_sz is int:
+		size_f = float(raw_sz as int)
+	var base_px: int = MonsterTable.monster_map_token_base_px(size_f)
+	var scale := float(_cell_px) / float(EXPLORER_MAP_LABEL_CELL_PX)
+	var dim := float(base_px) * scale
+	var cx := float(cell.x * _cell_px) + float(_cell_px) * 0.5
+	var cy := float(cell.y * _cell_px) + float(_cell_px) * 0.5
+	enc_rect.size = Vector2(dim, dim)
+	enc_rect.position = Vector2(cx - dim * 0.5, cy - dim * 0.5)
 
 
 func _remove_map_overlay_host(cell: Vector2i) -> void:
