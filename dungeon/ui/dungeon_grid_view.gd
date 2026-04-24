@@ -327,8 +327,8 @@ func _apply_encounter_token_layout(cell: Vector2i, enc_rect: TextureRect, tile_s
 	elif raw_sz is int:
 		size_f = float(raw_sz as int)
 	var base_px: int = MonsterTable.monster_map_token_base_px(size_f)
-	var scale := float(_cell_px) / float(EXPLORER_MAP_LABEL_CELL_PX)
-	var dim := float(base_px) * scale
+	var token_scale := float(_cell_px) / float(EXPLORER_MAP_LABEL_CELL_PX)
+	var dim := float(base_px) * token_scale
 	var cx := float(cell.x * _cell_px) + float(_cell_px) * 0.5
 	var cy := float(cell.y * _cell_px) + float(_cell_px) * 0.5
 	enc_rect.size = Vector2(dim, dim)

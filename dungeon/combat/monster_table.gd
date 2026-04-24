@@ -2,6 +2,7 @@ extends RefCounted
 
 ## Loads `res://dungeon/data/monsters.csv` (Explorer `priv/static/data/monsters.csv` mirror).
 
+const ExplorerMapIconSizing := preload("res://dungeon/ui/explorer_map_icon_sizing.gd")
 const CSV_PATH := "res://dungeon/data/monsters.csv"
 
 static var _loaded: bool = false
@@ -146,43 +147,6 @@ static func pick_random_global_by_rarity_max_cr(
 	return pool[rng.randi_range(0, pool.size() - 1)]
 
 
-## Explorer `DungeonWeb.DungeonLive.MapTemplate.convert_size_to_css_classes/1` at 48px cell base
-## (`size_classes_*` in `map_template.ex`) — used for on-map encounter token width/height.
+## Explorer `map_template.ex` map icon tiers — delegates to [`explorer_map_icon_sizing.gd`].
 static func monster_map_token_base_px(size: float) -> int:
-	var s := size
-	if s > 3.0:
-		return 48
-	if s <= 0.5:
-		if _monster_size_key_eq(s, 0.25):
-			return 12
-		if _monster_size_key_eq(s, 0.5):
-			return 24
-		return 24
-	if s <= 1.0:
-		if _monster_size_key_eq(s, 0.75):
-			return 36
-		return 48
-	if s <= 2.0:
-		if _monster_size_key_eq(s, 1.25):
-			return 60
-		if _monster_size_key_eq(s, 1.5):
-			return 72
-		if _monster_size_key_eq(s, 1.75):
-			return 84
-		if _monster_size_key_eq(s, 2.0):
-			return 96
-		return 96
-	# s in (2.0, 3.0]
-	if _monster_size_key_eq(s, 2.25):
-		return 108
-	if _monster_size_key_eq(s, 2.5):
-		return 120
-	if _monster_size_key_eq(s, 2.75):
-		return 132
-	if _monster_size_key_eq(s, 3.0):
-		return 144
-	return 144
-
-
-static func _monster_size_key_eq(a: float, b: float) -> bool:
-	return absf(a - b) < 0.001
+	return ExplorerMapIconSizing.base_px_from_size(size)

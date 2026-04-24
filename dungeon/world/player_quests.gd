@@ -657,9 +657,9 @@ static func kill_quest_target_name(quest: Dictionary) -> String:
 
 static func find_kill_quest_encounter_placement(
 	grid: Dictionary,
-	authority_seed: int,
-	quest_id: String,
-	target_name: String,
+	_authority_seed: int,
+	_quest_id: String,
+	_target_name: String,
 	rooms_or_areas: Array = [],
 	rng_override: RandomNumberGenerator = null
 ) -> Vector2i:
@@ -707,8 +707,8 @@ static func _quest_spawn_structure_positions(
 			var ry: int = int(d.get("y", 0))
 			var rw: int = int(d.get("width", 0))
 			var rh: int = int(d.get("height", 0))
-			var cx := rx + int(rw / 2)
-			var cy := ry + int(rh / 2)
+			var cx := rx + (rw >> 1)
+			var cy := ry + (rh >> 1)
 			for x in range(rx, rx + rw):
 				for y in range(ry, ry + rh):
 					var c := Vector2i(x, y)
@@ -826,10 +826,10 @@ static func find_active_kill_quest_for_victory(
 
 
 static func kill_quest_completion_append_body(
-	quest: Dictionary, defeated_name: String, map_theme_name: String
+	quest: Dictionary, _defeated_name: String, _map_theme_name: String
 ) -> String:
 	# Reuse Explorer-aligned copy that explicitly includes rewards.
-	# Keep args (defeated_name/map_theme_name) to preserve call sites and future flexibility.
+	# Keep args (_defeated_name/_map_theme_name) to preserve call sites and future flexibility.
 	return achievement_text_for_completed_quest(quest)
 
 

@@ -46,6 +46,7 @@ func _init() -> void:
 		"res://dungeon/ui/explorer_modal_chrome.gd",
 		"res://dungeon/ui/dungeon_session.gd",
 		"res://dungeon/ui/dungeon_tile_assets.gd",
+		"res://dungeon/ui/explorer_map_icon_sizing.gd",
 		"res://dungeon/ui/map_cell_overlay_art.gd",
 		"res://dungeon/ui/torch_flicker_fx.gd",
 		"res://dungeon/ui/dungeon_door_overlays.gd",
@@ -683,6 +684,21 @@ func _init() -> void:
 		"/map_links/outdoor_waypoint2.png"
 	):
 		push_error("check_parse: map overlay waypoint path drift")
+		quit(1)
+		return
+	const ExplorerMapIconSizing := preload("res://dungeon/ui/explorer_map_icon_sizing.gd")
+	if ExplorerMapIconSizing.base_px_from_size(1.15) != 96:
+		push_error(
+			"check_parse: Explorer map icon tier for size 1.15 expected 96px (not linear size*48)"
+		)
+		quit(1)
+		return
+	if ExplorerMapIconSizing.base_px_from_size(0.75) != 36:
+		push_error("check_parse: Explorer map icon tier for size 0.75 expected 36px")
+		quit(1)
+		return
+	if absf(MapCellOverlayArt.feature_display_size_for_name("Barrel") - 0.75) > 0.001:
+		push_error("check_parse: Barrel special feature registry size expected 0.75")
 		quit(1)
 		return
 	for seed_i in range(30):

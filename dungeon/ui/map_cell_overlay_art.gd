@@ -6,6 +6,7 @@ extends RefCounted
 const DungeonFog := preload("res://dungeon/fog/fog_of_war.gd")
 const GenFeat := preload("res://dungeon/generator/generator_features.gd")
 const TorchFlickerFx := preload("res://dungeon/ui/torch_flicker_fx.gd")
+const ExplorerMapIconSizing := preload("res://dungeon/ui/explorer_map_icon_sizing.gd")
 
 const _REGISTRY_JSON := "res://dungeon/data/special_feature_registry.json"
 const _IMAGES := "res://assets/explorer/images/"
@@ -104,8 +105,9 @@ static func _icon_px(cell_px: int, explorer_px: int = 32) -> int:
 
 static func _feature_icon_px(cell_px: int, feature_name: String) -> int:
 	var fsz := feature_display_size_for_name(feature_name)
-	var px := int(round(fsz * float(cell_px)))
-	return clampi(px, 8, int(float(cell_px) * 2.75))
+	var base_px: int = ExplorerMapIconSizing.base_px_from_size(fsz)
+	var px := int(round(float(base_px) * float(cell_px) / 48.0))
+	return maxi(8, px)
 
 
 static func _link_big_px(cell_px: int) -> int:
