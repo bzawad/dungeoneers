@@ -79,6 +79,11 @@ var _camera_world_center: Vector2 = Vector2.ZERO
 ## Cell the Explorer-style viewport is centered on (re-clamped on window resize).
 var _camera_focus_cell: Vector2i = Vector2i.ZERO
 var _follow_local_camera: bool = false
+## Viewport pixels: map must not scroll into this strip (e.g. HUD sidebar on the left).
+var _play_inset_left: float = 0.0
+var _play_inset_top: float = 0.0
+var _play_inset_right: float = 0.0
+var _play_inset_bottom: float = 0.0
 
 var _hover_polish_enabled: bool = true
 var _hover_root: Node2D
@@ -99,6 +104,30 @@ var _quest_target_glow_by_name_lower: Dictionary = {}
 
 func set_guards_hostile(hostile: bool) -> void:
 	_guards_hostile = hostile
+
+
+## Play rectangle in viewport pixels: map edges clamp to screen minus these insets (see `dungeon_session.gd`).
+func set_play_area_insets(left: float, top: float, right: float, bottom: float) -> void:
+	var nl := maxf(0.0, left)
+	var nt := maxf(0.0, top)
+	var nr := maxf(0.0, right)
+	var nb := maxf(0.0, bottom)
+	if (
+		absf(nl - _play_inset_left) < 1e-3
+		and absf(nt - _play_inset_top) < 1e-3
+		and absf(nr - _play_inset_right) < 1e-3
+		and absf(nb - _play_inset_bottom) < 1e-3
+	):
+		return
+	_play_inset_left = nl
+	_play_inset_top = nt
+	_play_inset_right = nr
+	_play_inset_bottom = nb
+	if _camera_for_fit != null and is_instance_valid(_camera_for_fit):
+		## Do not snap position while following the local marker — `_ensure_stats_hud` can run every
+		## stats tick and was calling here each time, fighting `_smooth_camera_follow` (map jump,
+		## sprite appears to rubber-band toward center).
+		_fit_camera(_camera_for_fit, not _follow_local_camera)
 
 
 func apply_secret_doors_snapshot(cells: PackedVector2Array) -> void:
@@ -243,7 +272,13 @@ func setup_from_grid(
 
 	_build_cell_labels(grid)
 
-	_camera_world_center = _explorer_clamped_view_center_world(_camera_focus_cell)
+	var vp0 := get_viewport()
+	var vs0: Vector2 = vp0.get_visible_rect().size if vp0 != null else Vector2(1152.0, 648.0)
+	var fit0 := _camera_fit_internal(vs0, _cell_center_world(_camera_focus_cell))
+	if fit0.is_empty():
+		_camera_world_center = _cell_center_world(_camera_focus_cell)
+	else:
+		_camera_world_center = fit0["position"] as Vector2
 	var cam := Camera2D.new()
 	cam.name = "DungeonCamera"
 	cam.position = _camera_world_center
@@ -1121,32 +1156,79 @@ func _explorer_visible_cell_span(viewport_width_px: int) -> Vector2i:
 	return Vector2i(mini(cap.x, DungeonGrid.MAP_WIDTH), mini(cap.y, DungeonGrid.MAP_HEIGHT))
 
 
-func _explorer_clamped_view_center_for_point(focus_world: Vector2) -> Vector2:
-	var vp := get_viewport()
-	var vw_px := EXPLORER_VIEWPORT_BREAKPOINT_PX
-	if vp != null:
-		vw_px = int(vp.get_visible_rect().size.x)
-	var span := _explorer_visible_cell_span(vw_px)
-	var map_w := float(DungeonGrid.MAP_WIDTH * _cell_px)
-	var map_h := float(DungeonGrid.MAP_HEIGHT * _cell_px)
+func _clamp_camera_center_for_play_rect(
+	focus_world: Vector2, z: float, vs: Vector2, map_w: float, map_h: float
+) -> Vector2:
+	var L := _play_inset_left
+	var T := _play_inset_top
+	var R := _play_inset_right
+	var B := _play_inset_bottom
+	var eff_w: float = vs.x - L - R
+	var eff_h: float = vs.y - T - B
+	var use_l := L
+	var use_t := T
+	var use_r := R
+	var use_b := B
+	if eff_w < 2.0:
+		eff_w = vs.x
+		use_l = 0.0
+		use_r = 0.0
+	if eff_h < 2.0:
+		eff_h = vs.y
+		use_t = 0.0
+		use_b = 0.0
 	var p := focus_world
-	var half_w := float(span.x * _cell_px) * 0.5
-	var half_h := float(span.y * _cell_px) * 0.5
+	## Always derive bounds from the same formulas; avoid a separate `map_w <= eff_w/z` branch.
+	## That branch flipped near equality (float noise) and jumped between `map_w * 0.5` and
+	## `clampf`, which felt like map/player jitter. When `xmax - xmin` is ~0, use the unique
+	## camera position (midpoint); `map_w * 0.5` is wrong for asymmetric left/right insets.
+	var xmin: float = (vs.x * 0.5 - use_l) / z
+	var xmax: float = map_w - (vs.x * 0.5 - use_r) / z
+	var span_x: float = xmax - xmin
 	var cx: float
+	if span_x <= 1e-3:
+		cx = (xmin + xmax) * 0.5
+	else:
+		cx = clampf(p.x, xmin, xmax)
+	var ymin: float = (vs.y * 0.5 - use_t) / z
+	var ymax: float = map_h - (vs.y * 0.5 - use_b) / z
+	var span_y: float = ymax - ymin
 	var cy: float
-	if span.x >= DungeonGrid.MAP_WIDTH:
-		cx = map_w * 0.5
+	if span_y <= 1e-3:
+		cy = (ymin + ymax) * 0.5
 	else:
-		cx = clampf(p.x, half_w, map_w - half_w)
-	if span.y >= DungeonGrid.MAP_HEIGHT:
-		cy = map_h * 0.5
-	else:
-		cy = clampf(p.y, half_h, map_h - half_h)
+		cy = clampf(p.y, ymin, ymax)
 	return Vector2(cx, cy)
 
 
 func _explorer_clamped_view_center_world(focus_cell: Vector2i) -> Vector2:
-	return _explorer_clamped_view_center_for_point(_cell_center_world(focus_cell))
+	var vp := get_viewport()
+	var vs: Vector2 = vp.get_visible_rect().size if vp != null else Vector2(1152.0, 648.0)
+	var fit := _camera_fit_internal(vs, _cell_center_world(focus_cell))
+	if fit.is_empty():
+		return _cell_center_world(focus_cell)
+	return fit["position"] as Vector2
+
+
+func _camera_fit_internal(vs: Vector2, focus_world: Vector2) -> Dictionary:
+	if vs.x < 2.0 or vs.y < 2.0:
+		return {}
+	var eff_w: float = vs.x - _play_inset_left - _play_inset_right
+	var eff_h: float = vs.y - _play_inset_top - _play_inset_bottom
+	if eff_w < 2.0:
+		eff_w = vs.x
+	if eff_h < 2.0:
+		eff_h = vs.y
+	var span := _explorer_visible_cell_span(int(vs.x))
+	var vis_px := Vector2(float(span.x * _cell_px), float(span.y * _cell_px))
+	var z_fit: float = minf(eff_w / vis_px.x, eff_h / vis_px.y)
+	var z: float = clampf(
+		z_fit * MAP_CAMERA_ZOOM_BIAS, VIEWPORT_ZOOM_CLAMP_MIN, GAMA_STYLE_MAX_ZOOM
+	)
+	var map_w := float(DungeonGrid.MAP_WIDTH * _cell_px)
+	var map_h := float(DungeonGrid.MAP_HEIGHT * _cell_px)
+	var desired := _clamp_camera_center_for_play_rect(focus_world, z, vs, map_w, map_h)
+	return {"zoom": Vector2(z, z), "position": desired}
 
 
 func _compute_camera_fit(cam: Camera2D) -> Dictionary:
@@ -1165,14 +1247,7 @@ func _compute_camera_fit(cam: Camera2D) -> Dictionary:
 			focus_world = _cell_center_world(_camera_focus_cell)
 	else:
 		focus_world = _cell_center_world(_camera_focus_cell)
-	var desired := _explorer_clamped_view_center_for_point(focus_world)
-	var span := _explorer_visible_cell_span(int(vs.x))
-	var vis_px := Vector2(float(span.x * _cell_px), float(span.y * _cell_px))
-	var z_fit: float = minf(vs.x / vis_px.x, vs.y / vis_px.y)
-	var z: float = clampf(
-		z_fit * MAP_CAMERA_ZOOM_BIAS, VIEWPORT_ZOOM_CLAMP_MIN, GAMA_STYLE_MAX_ZOOM
-	)
-	return {"zoom": Vector2(z, z), "position": desired}
+	return _camera_fit_internal(vs, focus_world)
 
 
 func _smooth_camera_follow(delta: float) -> void:

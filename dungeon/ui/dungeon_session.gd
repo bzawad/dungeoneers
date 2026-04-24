@@ -21,6 +21,10 @@ const PlayerCombatStats := preload("res://dungeon/combat/player_combat_stats.gd"
 const MapLinkSystem := preload("res://dungeon/generator/map_link_system.gd")
 
 const _EXPLORER_IMG_DIR := "res://assets/explorer/images/"
+## Left stats column: must match `MarginContainer` offsets in `_ensure_stats_hud` and map camera play inset.
+const STATS_HUD_MARGIN_LEFT_PX := 8
+const STATS_SIDEBAR_CONTENT_WIDTH_PX := 256
+const STATS_HUD_PLAY_EDGE_PX := STATS_HUD_MARGIN_LEFT_PX + STATS_SIDEBAR_CONTENT_WIDTH_PX
 
 var last_seed: int = 0
 var _path_grid: Dictionary = {}
@@ -333,6 +337,7 @@ func start_local(authority_seed: int, theme_direction: String) -> void:
 	_last_weapon_name = str(st0.get("player_weapon", "Dagger"))
 	_last_weapon_damage_dice = str(st0.get("weapon_damage_dice", "1d4"))
 	_ensure_stats_hud()
+	_sync_map_play_area_insets()
 	_refresh_stats_hud_text()
 
 
@@ -455,6 +460,7 @@ func start_from_grid(
 		if view.has_method("set_guards_hostile"):
 			view.set_guards_hostile(_hud_guards_hostile)
 		_ensure_stats_hud()
+		_sync_map_play_area_insets()
 		_refresh_stats_hud_text()
 
 
@@ -599,6 +605,7 @@ func reload_from_authority(grid: Dictionary, seed_for_log: int, welcome: Diction
 		view.set_guards_hostile(_hud_guards_hostile)
 	_explorer_audio().start_wander_music_from_seed(seed_for_log)
 	_ensure_stats_hud()
+	_sync_map_play_area_insets()
 	_refresh_stats_hud_text()
 
 
@@ -3861,6 +3868,12 @@ func _on_world_dialog_confirmed() -> void:
 	_dispatch_pending_world_pickup_action(k0, c0)
 
 
+func _sync_map_play_area_insets() -> void:
+	if _grid_view == null or not _grid_view.has_method("set_play_area_insets"):
+		return
+	_grid_view.call("set_play_area_insets", float(STATS_HUD_PLAY_EDGE_PX), 0.0, 0.0, 0.0)
+
+
 func _ensure_stats_hud() -> void:
 	if _stats_sidebar != null:
 		return
@@ -3876,10 +3889,10 @@ func _ensure_stats_hud() -> void:
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_LEFT_WIDE)
 	margin.anchor_right = 0.0
-	margin.offset_left = 8
+	margin.offset_left = float(STATS_HUD_MARGIN_LEFT_PX)
 	margin.offset_top = 8
 	margin.offset_bottom = -8
-	margin.offset_right = 8 + 276
+	margin.offset_right = float(STATS_HUD_MARGIN_LEFT_PX + STATS_SIDEBAR_CONTENT_WIDTH_PX)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stats_hud_root.add_child(margin)
 
@@ -4537,6 +4550,7 @@ func _on_player_local_stats_changed(
 	if _local_peer_id >= 0 and torch_burn_pct >= 0:
 		_last_peer_torch_burn[_local_peer_id] = torch_burn_pct
 	_ensure_stats_hud()
+	_sync_map_play_area_insets()
 	_refresh_stats_hud_text()
 	if _local_peer_id >= 0:
 		_refresh_cached_marker_for_peer(_local_peer_id)
